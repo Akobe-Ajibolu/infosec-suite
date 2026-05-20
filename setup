@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# InfoSec-Suite setup — install dependencies and register Claude Code skills
+set -euo pipefail
+
+SUITE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+banner() {
+  echo -e "${BOLD}"
+  echo "  ██╗███╗   ██╗███████╗ ██████╗ ███████╗███████╗ ██████╗"
+  echo "  ██║████╗  ██║██╔════╝██╔═══██╗██╔════╝██╔════╝██╔════╝"
+  echo "  ██║██╔██╗ ██║█████╗  ██║   ██║███████╗█████╗  ██║"
+  echo "  ██║██║╚██╗██║██╔══╝  ██║   ██║╚════██║██╔══╝  ██║"
+  echo "  ██║██║ ╚████║██║     ╚██████╔╝███████║███████╗╚██████╗"
+  echo "  ╚═╝╚═╝  ╚═══╝╚═╝      ╚═════╝ ╚══════╝╚══════╝ ╚═════╝"
+  echo -e "${NC}"
+  echo "  InfoSec-Suite — AI-driven security engagement framework"
+  echo "  Version: 0.1.0"
+  echo ""
+}
+
+fail() { echo -e "${RED}[FAIL]${NC} $*" >&2; exit 1; }
+ok()   { echo -e "${GREEN}[OK]${NC}   $*"; }
+info() { echo "       $*"; }
+
+check_os() {
+  if [ -f /etc/os-release ]; then
+    # shellcheck source=/dev/null
+    . /etc/os-release
+    case "$ID_LIKE $ID" in
+      *debian*|*ubuntu*|*kali*|*parrot*)
+        ok "OS: $PRETTY_NAME"
+        return 0
+        ;;
+    esac
+  fi
+  echo -e "${YELLOW}[WARN]${NC} Unsupported OS. InfoSec-Suite targets Debian-based systems (Kali, ParrotOS, Ubuntu, Debian)."
+  echo "       Proceeding anyway — some installs may fail."
+}
+
+check_claude_code() {
+  if command -v claude &>/dev/null; then
+    local ver
+    ver=$(claude --version 2>/dev/null | head -1 || echo "unknown")
+    ok "Claude Code: $ver"
+    return 0
+  fi
+  fail "Claude Code CLI not found. Install from https://claude.ai/code then re-run setup."
+}
+
+register_skills() {
+  echo ""
+  echo "Registering skills with Claude Code…"
+
+  local skills_dir="$SUITE_DIR/skills"
+  local registered=0
+
+  for skill_path in "$skills_dir"/*/SKILL.md; do
+    [ -f "$skill_path" ] || continue
+    local skill_name
+    skill_name=$(basename "$(dirname "$skill_path")")
+    # Claude Code picks up skills from .claude/skills/ in the project dir or ~/.claude/skills/
+    # For InfoSec-Suite, skills live in this repo — create symlinks in ~/.claude/skills/
+    local target_dir="$HOME/.claude/skills/infosec-${skill_name}"
+    mkdir -p "$target_dir"
+    if [ ! -L "$target_dir/SKILL.md" ] || [ "$(readlink "$target_dir/SKILL.md")" != "$skill_path" ]; then
+      ln -sf "$skill_path" "$target_dir/SKILL.md"
+    fi
+    ok "  /${skill_name} → $target_dir"
+    registered=$((registered + 1))
+  done
+
+  if [ "$registered" -eq 0 ]; then
+    echo -e "${YELLOW}[WARN]${NC} No skills found in $skills_dir"
+  else
+    info "$registered skill(s) registered"
+  fi
+}
+
+main() {
+  banner
+  echo "Step 1/3 — System check"
+  echo "-----------------------"
+  check_os
+  check_claude_code
+
+  echo ""
+  echo "Step 2/3 — Tool installation"
+  echo "-----------------------------"
+  bash "$SUITE_DIR/lib/tool-check.sh"
+
+  echo ""
+  echo "Step 3/3 — Skill registration"
+  echo "------------------------------"
+  register_skills
+
+  echo ""
+  echo -e "${GREEN}${BOLD}Setup complete.${NC}"
+  echo ""
+  echo "Start your first engagement:"
+  echo "  1. Open a terminal in your target workspace"
+  echo "  2. Run: claude"
+  echo "  3. Type: /plan"
+  echo ""
+  echo "Available skills:"
+  echo "  /plan       — interactive engagement planning"
+  echo "  /recon      — subdomain enum, port scan, tech detection"
+  echo "  /vuln-scan  — vulnerability scanning and classification"
+  echo ""
+}
+
+main "$@"

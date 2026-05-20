@@ -1,0 +1,3 @@
+session/
+.active-session
+*.bak
