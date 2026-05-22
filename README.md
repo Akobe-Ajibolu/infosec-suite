@@ -1,13 +1,10 @@
 # infosec-suite
 
-AI-driven security engagement framework built on [Claude Code](https://claude.ai/code).
+![Version](https://img.shields.io/badge/version-1.0.1-blue) ![Platform](https://img.shields.io/badge/platform-linux-informational) ![License](https://img.shields.io/badge/license-MIT-green) ![Powered by Claude Code](https://img.shields.io/badge/powered_by-Claude_Code-orange)
 
-Claude IS the operator — not an advisor. It runs full security engagements end-to-end: planning → recon → vulnerability scanning → professional report, using real security tools, enforcing scope, and producing structured findings.
+**Claude IS the operator — not an advisor.** It runs full security engagements end-to-end: planning → recon → vulnerability scanning → exploit validation → professional report, using real security tools, enforcing scope, and producing structured findings.
 
-## Who is this for
-
-- Solo bug bounty hunters
-- Independent pentest consultants (1-person shops)
+Built on [Claude Code](https://claude.ai/code). For solo bug bounty hunters and independent pentest consultants.
 
 ## What it covers
 
@@ -23,7 +20,7 @@ Claude IS the operator — not an advisor. It runs full security engagements end
 | `/recon` | Reconnaissance — subdomain enum (subfinder + crt.sh + HackerTarget), GitHub OSINT, WAF detection, port scanning, tech detection, asset classification |
 | `/vuln-scan` | Vulnerability scanning — methodology-aware nuclei templates, severity classification, false-positive flagging |
 | `/exploit` | Guided exploitation — browser crawl via mitmproxy + Playwright, injection point discovery, directory bruteforce (ffuf), PoC validation per vuln class |
-| `/report` | Report generation — professional pentest report or HackerOne-ready bug bounty submission from findings JSON |
+| `/report` | Report generation — professional pentest report or HackerOne-ready bug bounty submission from findings JSON, with PDF export |
 
 ## Requirements
 
@@ -40,7 +37,10 @@ chmod +x setup
 ./setup
 ```
 
-Setup installs all required tools automatically:
+> **Note:** Setup takes ~10–20 minutes on a fresh system. On Kali/ParrotOS with tools pre-installed, it's under 5 minutes.
+
+<details>
+<summary>What setup installs</summary>
 
 - Go 1.21+ (from go.dev tarball — not apt)
 - subfinder, httpx, nuclei, trufflehog, katana, ffuf, dalfox, interactsh-client (via `go install`)
@@ -51,7 +51,66 @@ Setup installs all required tools automatically:
 - AWS CLI, Google Cloud SDK, Azure CLI (required for cloud engagements)
 - Pacu — AWS exploitation framework
 
-> **Note:** Setup takes ~10–20 minutes on a fresh system. On Kali/ParrotOS with tools pre-installed, it's under 5 minutes.
+</details>
+
+## Usage
+
+```bash
+# Start Claude Code in your engagement workspace
+claude
+
+# Step 1: Plan the engagement
+/plan
+
+# Step 2: Run reconnaissance
+/recon
+
+# Step 3: Scan for vulnerabilities
+/vuln-scan
+
+# Step 4: Exploit and validate findings
+/exploit
+
+# Step 5: Generate the report
+/report
+```
+
+Example output from `/report`:
+
+```
+==============================
+ /report complete
+==============================
+
+  Markdown → session/abc123/report-20260522.md
+  PDF     → session/abc123/report-20260522.pdf
+```
+
+All engagement data is saved to `session/{engagement_id}/`:
+
+```
+session/{engagement_id}/
+├── engagement-plan.json        # Engagement parameters
+├── scope.txt                   # In-scope targets
+├── findings-recon.json         # Recon findings
+├── findings-vulns.json         # Vulnerability findings
+├── exploit-injection-points.json   # Injection points from browser crawl
+├── exploit-ffuf-dirs.json          # Directory bruteforce results
+├── findings-exploit.json           # Confirmed PoC evidence
+├── idor-candidates.txt             # BOLA/IDOR candidates for manual review
+├── report-YYYYMMDD.md              # Generated report (Markdown)
+├── report-YYYYMMDD.pdf             # PDF export (requires weasyprint)
+└── report-YYYYMMDD.html            # Intermediate HTML (PDF debug artifact)
+```
+
+## Report modes
+
+`/report` auto-detects the engagement context from `engagement-plan.json`:
+
+- **`bug_bounty`** — HackerOne/Bugcrowd-formatted submission block per critical/high finding, with steps to reproduce and impact statements
+- **`internal`** — full pentest report: confidential cover page, executive summary, CVSS severity table, technical findings with numbered IDs (e.g. `EC-IPF-001`), remediation guidance
+
+PDF output is automatic if `weasyprint` is installed (`pip3 install weasyprint` or run `./setup`). Includes A4 layout, severity colour bands, cover page, CONFIDENTIAL footer, and page numbers.
 
 ## API keys (optional, improve coverage)
 
@@ -79,73 +138,21 @@ chmod 600 ~/.infosec-suite/config
 
 All keys are optional. `/recon` and `/report` degrade gracefully when keys are absent.
 
-## Usage
-
-```bash
-# Start Claude Code in your engagement workspace
-claude
-
-# Step 1: Plan the engagement
-/plan
-
-# Step 2: Run reconnaissance
-/recon
-
-# Step 3: Scan for vulnerabilities
-/vuln-scan
-
-# Step 4: Exploit and validate findings
-/exploit
-
-# Step 5: Generate the report
-/report
-```
-
-All engagement data is saved to `session/{engagement_id}/`:
-
-```
-session/{engagement_id}/
-├── engagement-plan.json        # Engagement parameters
-├── scope.txt                   # In-scope targets
-├── findings-recon.json             # Recon findings
-├── findings-vulns.json             # Vulnerability findings
-├── exploit-injection-points.json   # Injection points from browser crawl
-├── exploit-ffuf-dirs.json          # Directory bruteforce results
-├── findings-exploit.json           # Confirmed PoC evidence
-├── idor-candidates.txt             # BOLA/IDOR candidates for manual review
-├── report-YYYYMMDD.md              # Generated report (Markdown)
-├── report-YYYYMMDD.pdf             # PDF export (requires weasyprint)
-└── report-YYYYMMDD.html            # Intermediate HTML (PDF debug artifact)
-```
-
-## Report modes
-
-`/report` auto-detects the engagement context from `engagement-plan.json`:
-
-- **`bug_bounty`** — generates a HackerOne/Bugcrowd-formatted submission block for each critical/high finding, with steps to reproduce and impact statements
-- **`internal`** — generates a full pentest report with a confidential cover page, executive summary, and findings sorted by severity
-
-After writing the Markdown file, `/report` automatically generates a PDF if `weasyprint` is installed:
-
-```bash
-pip3 install weasyprint   # one-time setup (or run ./setup)
-```
-
-The PDF output includes professional styling: A4 layout, severity colour bands (Critical=red, High=orange, Medium=amber, Low=blue), cover page, CONFIDENTIAL footer, and page numbers. An intermediate `.html` file is also written for debugging.
-
 ## Testing with fixtures
 
 Sample session data is included in `fixtures/` to test `/report` without running a full engagement:
 
 ```bash
 # Bug bounty report
-cp -r fixtures/bug_bounty session/a8098c1a-f86e-11da-bd1a-00112444be1e
-echo "session/a8098c1a-f86e-11da-bd1a-00112444be1e" > .active-session
+ID="a8098c1a-f86e-11da-bd1a-00112444be1e"
+cp -r fixtures/bug_bounty session/$ID
+echo "session/$ID" > .active-session
 # then in claude: /report
 
 # Internal pentest report
-cp -r fixtures/internal session/c3d4e5f6-1234-5678-abcd-ef0123456789
-echo "session/c3d4e5f6-1234-5678-abcd-ef0123456789" > .active-session
+ID="c3d4e5f6-1234-5678-abcd-ef0123456789"
+cp -r fixtures/internal session/$ID
+echo "session/$ID" > .active-session
 # then in claude: /report
 ```
 
