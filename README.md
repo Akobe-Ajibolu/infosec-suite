@@ -157,6 +157,10 @@ Scope enforcement is mandatory and non-negotiable. All discovered subdomains are
 
 This tool is for **authorized security testing only**. You are responsible for ensuring you have explicit permission to test any target. The authors accept no liability for unauthorized use.
 
+## Inspiration
+
+InfoSec-Suite was inspired by [Garry Tan's gstack](https://github.com/garrytan/gstack) — the idea that Claude Code skills can encode full professional workflows, not just code snippets. gstack proved that an AI agent with the right skill files can operate as a first-class practitioner in a domain. InfoSec-Suite applies that pattern to security engagements.
+
 ## Roadmap
 
 - v1.0.0: `/plan` + `/recon` + `/vuln-scan` ✅
