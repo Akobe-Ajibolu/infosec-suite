@@ -16,11 +16,11 @@ Built on [Claude Code](https://claude.ai/code). For solo bug bounty hunters and 
 
 | Skill | What it does |
 |-------|-------------|
-| `/plan` | Interactive engagement planning — defines targets, scope, methodology, and rules of engagement |
-| `/recon` | Reconnaissance — subdomain enum (subfinder + crt.sh + HackerTarget), GitHub OSINT, WAF detection, port scanning, tech detection, asset classification |
-| `/vuln-scan` | Vulnerability scanning — methodology-aware nuclei templates, severity classification, false-positive flagging |
-| `/exploit` | Guided exploitation — browser crawl via mitmproxy + Playwright, injection point discovery, directory bruteforce (ffuf), PoC validation per vuln class |
-| `/report` | Report generation — professional pentest report or HackerOne-ready bug bounty submission from findings JSON, with PDF export |
+| `/infosec-plan` | Interactive engagement planning — defines targets, scope, methodology, and rules of engagement |
+| `/infosec-recon` | Reconnaissance — subdomain enum (subfinder + crt.sh + HackerTarget), GitHub OSINT, WAF detection, port scanning, tech detection, asset classification |
+| `/infosec-vuln-scan` | Vulnerability scanning — methodology-aware nuclei templates, severity classification, false-positive flagging |
+| `/infosec-exploit` | Guided exploitation — browser crawl via mitmproxy + Playwright, injection point discovery, directory bruteforce (ffuf), PoC validation per vuln class |
+| `/infosec-report` | Report generation — professional pentest report or HackerOne-ready bug bounty submission from findings JSON, with PDF export |
 
 ## Requirements
 
@@ -60,26 +60,26 @@ chmod +x setup
 claude
 
 # Step 1: Plan the engagement
-/plan
+/infosec-plan
 
 # Step 2: Run reconnaissance
-/recon
+/infosec-recon
 
 # Step 3: Scan for vulnerabilities
-/vuln-scan
+/infosec-vuln-scan
 
 # Step 4: Exploit and validate findings
-/exploit
+/infosec-exploit
 
 # Step 5: Generate the report
-/report
+/infosec-report
 ```
 
-Example output from `/report`:
+Example output from `/infosec-report`:
 
 ```
 ==============================
- /report complete
+ /infosec-report complete
 ==============================
 
   Markdown → session/abc123/report-20260522.md
@@ -105,7 +105,7 @@ session/{engagement_id}/
 
 ## Report modes
 
-`/report` auto-detects the engagement context from `engagement-plan.json`:
+`/infosec-report` auto-detects the engagement context from `engagement-plan.json`:
 
 - **`bug_bounty`** — HackerOne/Bugcrowd-formatted submission block per critical/high finding, with steps to reproduce and impact statements
 - **`internal`** — full pentest report: confidential cover page, executive summary, CVSS severity table, technical findings with numbered IDs (e.g. `EC-IPF-001`), remediation guidance
@@ -136,24 +136,24 @@ chmod 600 ~/.infosec-suite/config
 | `PREPARER_NAME` | — | Your name on internal pentest reports |
 | `EVIDENCE_MAX_CHARS` | — | Truncate evidence snippets (default: 500) |
 
-All keys are optional. `/recon` and `/report` degrade gracefully when keys are absent.
+All keys are optional. `/infosec-recon` and `/infosec-report` degrade gracefully when keys are absent.
 
 ## Testing with fixtures
 
-Sample session data is included in `fixtures/` to test `/report` without running a full engagement:
+Sample session data is included in `fixtures/` to test `/infosec-report` without running a full engagement:
 
 ```bash
 # Bug bounty report
 ID="a8098c1a-f86e-11da-bd1a-00112444be1e"
 cp -r fixtures/bug_bounty session/$ID
 echo "session/$ID" > .active-session
-# then in claude: /report
+# then in claude: /infosec-report
 
 # Internal pentest report
 ID="c3d4e5f6-1234-5678-abcd-ef0123456789"
 cp -r fixtures/internal session/$ID
 echo "session/$ID" > .active-session
-# then in claude: /report
+# then in claude: /infosec-report
 ```
 
 ## Scope enforcement
@@ -170,6 +170,6 @@ InfoSec-Suite was inspired by [Garry Tan's gstack](https://github.com/garrytan/g
 
 ## Roadmap
 
-- v1.0.0: `/plan` + `/recon` + `/vuln-scan` ✅
-- v1.0.1: `/exploit` + `/report` — browser crawl, PoC validation, multi-role auth testing, professional report generation, PDF output via weasyprint ✅
+- v1.0.0: `/infosec-plan` + `/infosec-recon` + `/infosec-vuln-scan` ✅
+- v1.0.1: `/infosec-exploit` + `/infosec-report` — browser crawl, PoC validation, multi-role auth testing, professional report generation, PDF output via weasyprint ✅
 - v1.2.0: parallel engagements, multi-target support, auth-aware scanning

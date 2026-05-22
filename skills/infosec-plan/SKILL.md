@@ -1,11 +1,11 @@
 ---
-name: plan
+name: infosec-plan
 version: 1.0.1
 description: |
   Interactive security engagement planner. Guides the operator through
   target definition, scope, methodology selection, and rules of engagement.
   Produces engagement-plan.json and creates the session directory.
-  Must be run before /recon and /vuln-scan.
+  Must be run before /infosec-recon and /infosec-vuln-scan.
 triggers:
   - plan engagement
   - start engagement
@@ -14,17 +14,17 @@ triggers:
   - plan security test
 ---
 
-# /plan
+# /infosec-plan
 
-Interactive engagement planner — sets up everything /recon and /vuln-scan need.
+Interactive engagement planner — sets up everything /infosec-recon and /infosec-vuln-scan need.
 
 ## What this skill does
 
 1. Asks the operator for engagement details (target, scope, type, context)
 2. Selects the appropriate methodology
 3. Creates `session/{engagement_id}/` with `engagement-plan.json` and `scope.txt`
-4. Writes `.active-session` pointer so /recon and /vuln-scan auto-locate the plan
-5. Prints a summary and hands off to /recon
+4. Writes `.active-session` pointer so /infosec-recon and /infosec-vuln-scan auto-locate the plan
+5. Prints a summary and hands off to /infosec-recon
 
 ## Step 0: Tool check
 
@@ -42,7 +42,7 @@ else
 fi
 ```
 
-If any MISSING lines appear, tell the operator: "Run `./setup` to install missing tools, then restart /plan."
+If any MISSING lines appear, tell the operator: "Run `./setup` to install missing tools, then restart /infosec-plan."
 Do NOT proceed with missing required tools.
 
 ## Step 1: Gather engagement details
@@ -145,7 +145,7 @@ api.example.com
 staging.example.com
 ```
 
-For IP ranges (CIDR notation), write the range as-is. The /recon skill handles IP vs domain targets.
+For IP ranges (CIDR notation), write the range as-is. The /infosec-recon skill handles IP vs domain targets.
 
 Write using the Write tool:
 ```
@@ -190,7 +190,7 @@ echo "session/{ENGAGEMENT_ID}" > .active-session
 echo "Active session set: session/{ENGAGEMENT_ID}"
 ```
 
-This file is read by /recon and /vuln-scan to auto-locate the current engagement.
+This file is read by /infosec-recon and /infosec-vuln-scan to auto-locate the current engagement.
 
 ## Step 7: Print engagement summary
 
@@ -214,19 +214,19 @@ Known tech:       {known_tech or "none specified"}
 Sensitive paths:  {sensitive_paths or "none"}
 Notes:            {notes or "none"}
 
-Next step: run /recon to begin reconnaissance.
+Next step: run /infosec-recon to begin reconnaissance.
 ```
 
-## Step 8: Offer to start /recon immediately
+## Step 8: Offer to start /infosec-recon immediately
 
 Ask: "Ready to start reconnaissance now?"
 
 Options:
-- Yes, run /recon now
-- No, I'll run /recon manually later
+- Yes, run /infosec-recon now
+- No, I'll run /infosec-recon manually later
 
-If yes: invoke the /recon skill.
-If no: tell the operator "When ready, type /recon — the session is already configured."
+If yes: invoke the /infosec-recon skill.
+If no: tell the operator "When ready, type /infosec-recon — the session is already configured."
 
 ## Error handling
 
@@ -234,4 +234,4 @@ If no: tell the operator "When ready, type /recon — the session is already con
 
 **Write tool failure**: Report the exact error. Do not proceed — the plan file is the contract for all subsequent skills.
 
-**Operator aborts mid-flow**: The session directory may be partially created. Inform the operator: "Partial session at session/{ENGAGEMENT_ID}/ — you can delete it and start over with /plan."
+**Operator aborts mid-flow**: The session directory may be partially created. Inform the operator: "Partial session at session/{ENGAGEMENT_ID}/ — you can delete it and start over with /infosec-plan."

@@ -1,8 +1,8 @@
-# /report — Professional Pentest Report Generator
+# /infosec-report — Professional Pentest Report Generator
 # InfoSec-Suite v1.0.1
 #
-# Usage:  /report
-#         /report engagement_id={uuid}
+# Usage:  /infosec-report
+#         /infosec-report engagement_id={uuid}
 #
 # Reads:  session/{id}/engagement-plan.json
 #         session/{id}/findings-recon.json
@@ -40,7 +40,7 @@ elif [ -f .active-session ]; then
   SESSION_DIR=$(cat .active-session | tr -d '[:space:]')
   ENGAGEMENT_ID=$(basename "$SESSION_DIR")
 else
-  echo "[HALT] No active session. Run /plan first or pass engagement_id={uuid}."
+  echo "[HALT] No active session. Run /infosec-plan first or pass engagement_id={uuid}."
   exit 1
 fi
 
@@ -51,9 +51,9 @@ EXPLOIT_FILE="${SESSION_DIR}/findings-exploit.json"
 IDOR_FILE="${SESSION_DIR}/idor-candidates.txt"
 CONFIG_FILE="${HOME}/.infosec-suite/config"
 
-[ -d "$SESSION_DIR" ] || { echo "[HALT] Session directory not found: ${SESSION_DIR}. Check that /plan wrote the session directory."; exit 1; }
-[ -f "$PLAN_FILE"  ] || { echo "[HALT] engagement-plan.json missing. Run /plan first."; exit 1; }
-[ -f "$RECON_FILE" ] || { echo "[HALT] findings-recon.json missing. Run /recon first."; exit 1; }
+[ -d "$SESSION_DIR" ] || { echo "[HALT] Session directory not found: ${SESSION_DIR}. Check that /infosec-plan wrote the session directory."; exit 1; }
+[ -f "$PLAN_FILE"  ] || { echo "[HALT] engagement-plan.json missing. Run /infosec-plan first."; exit 1; }
+[ -f "$RECON_FILE" ] || { echo "[HALT] findings-recon.json missing. Run /infosec-recon first."; exit 1; }
 
 VULNS_MISSING=false
 [ -f "$VULNS_FILE" ] || { echo "[WARN] findings-vulns.json not found — report will contain recon findings only."; VULNS_MISSING=true; }
@@ -102,7 +102,7 @@ CLIENT_NAME is empty):
 
 ```
 D1 — Report metadata
-Project: /report for ${TARGET} (${ENGAGEMENT_ID})
+Project: /infosec-report for ${TARGET} (${ENGAGEMENT_ID})
 ELI10: To generate the cover page and contact table we need a few details about you and
   the client. These are saved to engagement-plan.json so you only enter them once per
   engagement. For bug bounty reports, the client section is auto-populated from the target
@@ -873,7 +873,7 @@ fi
 ```bash
 echo ""
 echo "=============================="
-echo " /report complete"
+echo " /infosec-report complete"
 echo "=============================="
 echo ""
 echo "  Markdown → ${REPORT_FILE}"
@@ -887,9 +887,9 @@ echo ""
 
 ## Error handling
 
-- No active session + no UUID → halt: "No active session. Run /plan first."
+- No active session + no UUID → halt: "No active session. Run /infosec-plan first."
 - Missing engagement-plan.json → halt
-- Missing findings-recon.json → halt: "Run /recon before /report."
+- Missing findings-recon.json → halt: "Run /infosec-recon before /infosec-report."
 - Missing findings-vulns.json → warn + generate recon-only report
 - Missing findings-exploit.json → silently skip exploit findings
 - Missing idor-candidates.txt → silently skip IDOR section

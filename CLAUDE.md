@@ -7,11 +7,11 @@ AI-driven security engagement framework. Claude executes security tools directly
 When the user's request matches an available skill, invoke it via the Skill tool.
 
 Key routing rules:
-- Plan / start / new engagement → invoke /plan
-- Recon / enumerate / subdomain / asset discovery → invoke /recon
-- Vuln scan / vulnerability / scan / nuclei → invoke /vuln-scan
-- Exploit / test / validate / inject / bruteforce / crawl → invoke /exploit
-- Report / generate report / write report → invoke /report
+- Plan / start / new engagement → invoke /infosec-plan
+- Recon / enumerate / subdomain / asset discovery → invoke /infosec-recon
+- Vuln scan / vulnerability / scan / nuclei → invoke /infosec-vuln-scan
+- Exploit / test / validate / inject / bruteforce / crawl → invoke /infosec-exploit
+- Report / generate report / write report → invoke /infosec-report
 
 ## Operator model
 

@@ -66,7 +66,7 @@ register_skills() {
     skill_name=$(basename "$(dirname "$skill_path")")
     # Claude Code picks up skills from .claude/skills/ in the project dir or ~/.claude/skills/
     # For InfoSec-Suite, skills live in this repo — create symlinks in ~/.claude/skills/
-    local target_dir="$HOME/.claude/skills/infosec-${skill_name}"
+    local target_dir="$HOME/.claude/skills/${skill_name}"
     mkdir -p "$target_dir"
     if [ ! -L "$target_dir/SKILL.md" ] || [ "$(readlink "$target_dir/SKILL.md")" != "$skill_path" ]; then
       ln -sf "$skill_path" "$target_dir/SKILL.md"
@@ -105,14 +105,14 @@ main() {
   echo "Start your first engagement:"
   echo "  1. Open a terminal in your target workspace"
   echo "  2. Run: claude"
-  echo "  3. Type: /plan"
+  echo "  3. Type: /infosec-plan"
   echo ""
   echo "Available skills:"
-  echo "  /plan       — interactive engagement planning"
-  echo "  /recon      — subdomain enum, crt.sh, GitHub OSINT, WAF detection, port scan"
-  echo "  /vuln-scan  — vulnerability scanning and classification"
-  echo "  /exploit    — browser crawl, injection point discovery, PoC validation"
-  echo "  /report     — generate professional pentest/bug bounty report"
+  echo "  /infosec-plan       — interactive engagement planning"
+  echo "  /infosec-recon      — subdomain enum, crt.sh, GitHub OSINT, WAF detection, port scan"
+  echo "  /infosec-vuln-scan  — vulnerability scanning and classification"
+  echo "  /infosec-exploit    — browser crawl, injection point discovery, PoC validation"
+  echo "  /infosec-report     — generate professional pentest/bug bounty report"
   echo ""
   echo "API keys (optional, improve coverage):"
   echo "  ~/.infosec-suite/config — set GITHUB_TOKEN, PHONEBOOK_API_KEY, HACKERTARGET_API_KEY"

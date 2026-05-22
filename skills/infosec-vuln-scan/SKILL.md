@@ -1,8 +1,8 @@
 ---
-name: vuln-scan
+name: infosec-vuln-scan
 version: 1.0.1
 description: |
-  Vulnerability scanning skill. Reads findings-recon.json from /recon,
+  Vulnerability scanning skill. Reads findings-recon.json from /infosec-recon,
   selects nuclei templates based on detected tech and engagement type,
   runs targeted vuln scanning, classifies findings by severity, and
   produces findings-vulns.json. Handles cloud credential verification
@@ -15,9 +15,9 @@ triggers:
   - vuln-scan
 ---
 
-# /vuln-scan
+# /infosec-vuln-scan
 
-Vulnerability scanning phase — exploits the attack surface mapped by /recon.
+Vulnerability scanning phase — exploits the attack surface mapped by /infosec-recon.
 
 ## Phases
 
@@ -37,19 +37,19 @@ if [ -f .active-session ]; then
   PLAN_FILE="$SESSION_DIR/engagement-plan.json"
   RECON_FILE="$SESSION_DIR/findings-recon.json"
 else
-  echo "ERROR: No active session found. Run /plan first, or provide engagement_id= param."
+  echo "ERROR: No active session found. Run /infosec-plan first, or provide engagement_id= param."
   exit 1
 fi
 
 if [ ! -f "$PLAN_FILE" ]; then
   echo "ERROR: engagement-plan.json not found at $PLAN_FILE"
-  echo "Run /plan to create an engagement plan."
+  echo "Run /infosec-plan to create an engagement plan."
   exit 1
 fi
 
 if [ ! -f "$RECON_FILE" ]; then
   echo "ERROR: findings-recon.json not found at $RECON_FILE"
-  echo "Run /recon before /vuln-scan."
+  echo "Run /infosec-recon before /infosec-vuln-scan."
   exit 1
 fi
 ```
@@ -245,7 +245,7 @@ For each nuclei finding:
 
 3. Never remove or deduplicate findings — add the review flag and explain in `review_reason`.
 
-4. Cross-reference with recon findings — if /recon already flagged the same host:port issue, note it in `review_reason`.
+4. Cross-reference with recon findings — if /infosec-recon already flagged the same host:port issue, note it in `review_reason`.
 
 ## Step 5: Write findings-vulns.json
 

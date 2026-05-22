@@ -1,5 +1,5 @@
 ---
-name: recon
+name: infosec-recon
 version: 1.0.1
 description: |
   Reconnaissance skill. Multi-source passive subdomain enumeration (subfinder,
@@ -14,7 +14,7 @@ triggers:
   - enumerate targets
 ---
 
-# /recon
+# /infosec-recon
 
 Reconnaissance phase — maps the full attack surface before vulnerability scanning.
 
@@ -72,7 +72,7 @@ mkdir -p "$SESSION_DIR"
 cp "$SCOPE_PARAM" "$SESSION_DIR/scope.txt"
 ```
 
-Tell the operator: "Running without an engagement plan. Results will be saved to session/{ENGAGEMENT_ID}/. For full engagement tracking, run /plan first."
+Tell the operator: "Running without an engagement plan. Results will be saved to session/{ENGAGEMENT_ID}/. For full engagement tracking, run /infosec-plan first."
 
 ### Session resume check
 
@@ -387,7 +387,7 @@ _update_state "live_host_probe"
 
 ## Step 5: WAF detection
 
-Identify Web Application Firewalls protecting each live host. WAF presence affects subsequent scanning strategy — rate limits, evasion, and template selection in /vuln-scan.
+Identify Web Application Firewalls protecting each live host. WAF presence affects subsequent scanning strategy — rate limits, evasion, and template selection in /infosec-vuln-scan.
 
 ```bash
 python3 -c "
@@ -434,7 +434,7 @@ fi
 
 Read `waf-detection.json`. For each protected host, add a recon finding:
 - WAF detected → INFO severity, `review_recommended: true`, note WAF vendor + host
-- This informs /vuln-scan: protected hosts may need rate limit reduction and evasion-aware templates
+- This informs /infosec-vuln-scan: protected hosts may need rate limit reduction and evasion-aware templates
 
 _update_state "waf_detection"
 
@@ -461,7 +461,7 @@ nmap -sV --open -T4 --min-parallelism 10 \
 
 Read `$SESSION_DIR/nmap-output.nmap` using the Read tool. For each host, note:
 - Open ports and services
-- Service versions (for CVE correlation in /vuln-scan)
+- Service versions (for CVE correlation in /infosec-vuln-scan)
 - Unexpected services (e.g. port 22 exposed on a web server, port 3306 MySQL accessible externally)
 
 _update_state "port_scan"
@@ -617,7 +617,7 @@ Notable findings:
 
 Output: session/{engagement_id}/findings-recon.json
 
-Next step: run /vuln-scan to begin vulnerability scanning.
+Next step: run /infosec-vuln-scan to begin vulnerability scanning.
 ```
 
 If IDOR candidates > 0:
@@ -627,7 +627,7 @@ If GitHub secrets found:
 "[CRITICAL] Verified secrets found in GitHub. Review session/{id}/github-recon/trufflehog-secrets.json immediately — revoke any exposed credentials before proceeding."
 
 If WAF detected:
-"WAF detected on {N} hosts. /vuln-scan will use conservative rate limits on protected hosts."
+"WAF detected on {N} hosts. /infosec-vuln-scan will use conservative rate limits on protected hosts."
 
 ## Error handling
 
