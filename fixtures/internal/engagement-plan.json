@@ -1,0 +1,18 @@
+{
+  "engagement_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+  "target": "corp.acme.com",
+  "context": "internal",
+  "methodology": "pentest",
+  "created": "2026-05-21T08:00:00Z",
+  "targets": [
+    { "domain": "corp.acme.com", "in_scope": true },
+    { "domain": "intranet.acme.com", "in_scope": true },
+    { "domain": "vpn.acme.com", "in_scope": true },
+    { "domain": "mail.acme.com", "in_scope": true }
+  ],
+  "rules": {
+    "max_requests_per_second": 20,
+    "excluded_tools": ["sqlmap"],
+    "sensitive_paths": ["/hr/payroll", "/finance/ledger", "/admin/db"]
+  }
+}

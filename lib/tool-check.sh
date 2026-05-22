@@ -47,16 +47,13 @@ install_go() {
   sudo tar -C /usr/local -xzf "/tmp/${tarball}"
   rm -f "/tmp/${tarball}"
 
-  # Refresh PATH in the current shell so subsequent go install calls work
   export PATH="$PATH:/usr/local/go/bin"
 
-  # Persist for future shells
   if ! grep -q '/usr/local/go/bin' /etc/environment 2>/dev/null; then
     echo 'PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin"' \
       | sudo tee /etc/environment > /dev/null
   fi
 
-  # Also add to ~/.bashrc and ~/.zshrc if present
   for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
     if [ -f "$rc" ] && ! grep -q '/usr/local/go/bin' "$rc"; then
       echo 'export PATH="$PATH:/usr/local/go/bin"' >> "$rc"
@@ -95,7 +92,6 @@ check_go() {
 _go_install() {
   local name="$1"
   local pkg="$2"
-  # Ensure Go bin dir is on PATH
   export PATH="$PATH:$(go env GOPATH)/bin:/usr/local/go/bin"
   if command -v "$name" &>/dev/null; then
     ok "$name"
@@ -104,7 +100,6 @@ _go_install() {
   info "Installing $name via go install…"
   go install -v "$pkg" 2>&1 | tail -5
   if ! command -v "$name" &>/dev/null; then
-    # Try adding GOPATH/bin explicitly and retry
     export PATH="$PATH:$(go env GOPATH)/bin"
     hash -r 2>/dev/null || true
   fi
@@ -122,13 +117,16 @@ check_httpx() {
 
 check_nuclei() {
   _go_install nuclei "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
-  # Update templates after install; templates live at ~/.local/share/nuclei-templates/
   if [ ! -d "$HOME/.local/share/nuclei-templates" ]; then
     info "Downloading nuclei templates (first run)…"
     nuclei -update-templates -silent 2>/dev/null || warn "nuclei -update-templates failed — run manually: nuclei -update-templates"
   else
     ok "nuclei-templates ($(ls "$HOME/.local/share/nuclei-templates" | wc -l | tr -d ' ') dirs)"
   fi
+}
+
+check_trufflehog() {
+  _go_install trufflehog "github.com/trufflesecurity/trufflehog/v3@latest"
 }
 
 # ---------------------------------------------------------------------------
@@ -147,30 +145,224 @@ _apt_install() {
   ok "$name"
 }
 
-check_nmap()   { _apt_install nmap; }
-check_jq()     { _apt_install jq; }
-check_curl()   { _apt_install curl; }
-check_git()    { _apt_install git; }
+check_nmap()        { _apt_install nmap; }
+check_jq()          { _apt_install jq; }
+check_curl()        { _apt_install curl; }
+check_git()         { _apt_install git; }
+check_python3()     { _apt_install python3; }
+check_python3_pip() { _apt_install pip3 python3-pip; }
+check_unzip()       { _apt_install unzip; }
 
 # ---------------------------------------------------------------------------
-# Optional cloud CLIs — warn only, don't fail
+# pip-installable tools
 # ---------------------------------------------------------------------------
 
-check_cloud_optional() {
-  local missing=()
-  command -v aws   &>/dev/null || missing+=("aws-cli")
-  command -v gcloud &>/dev/null || missing+=("gcloud")
-  command -v az    &>/dev/null || missing+=("az (azure-cli)")
-
-  if [ ${#missing[@]} -gt 0 ]; then
-    warn "Cloud CLIs not found: ${missing[*]}"
-    info "Install them if you plan to run cloud engagements:"
-    info "  AWS:   https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
-    info "  GCP:   https://cloud.google.com/sdk/docs/install"
-    info "  Azure: https://learn.microsoft.com/en-us/cli/azure/install-azure-cli"
-  else
-    ok "Cloud CLIs (aws, gcloud, az)"
+_pip_install() {
+  local name="$1"
+  local pkg="${2:-$1}"
+  if command -v "$name" &>/dev/null; then
+    ok "$name"
+    return 0
   fi
+  info "Installing $pkg via pip3…"
+  pip3 install --quiet "$pkg" 2>/dev/null || pip3 install "$pkg" || { warn "$name install failed via pip3"; return 1; }
+  hash -r 2>/dev/null || true
+  command -v "$name" &>/dev/null || { warn "$name not on PATH after pip install — try: pip3 install --user $pkg"; return 1; }
+  ok "$name"
+}
+
+check_wafw00f() {
+  _pip_install wafw00f
+}
+
+# ---------------------------------------------------------------------------
+# Exploit toolchain
+# ---------------------------------------------------------------------------
+
+check_ffuf() {
+  _go_install ffuf "github.com/ffuf/ffuf/v2@latest"
+}
+
+check_katana() {
+  _go_install katana "github.com/projectdiscovery/katana/cmd/katana@latest"
+}
+
+check_dalfox() {
+  _go_install dalfox "github.com/hahwul/dalfox/v2@latest"
+}
+
+check_interactsh() {
+  _go_install interactsh-client "github.com/projectdiscovery/interactsh/cmd/interactsh-client@latest"
+}
+
+check_sqlmap() {
+  _apt_install sqlmap
+}
+
+check_mitmproxy() {
+  if command -v mitmdump &>/dev/null; then
+    ok "mitmproxy ($(mitmdump --version 2>/dev/null | head -1 | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' || echo 'installed'))"
+    return 0
+  fi
+  info "Installing mitmproxy via pip3…"
+  pip3 install --quiet mitmproxy 2>/dev/null || pip3 install mitmproxy || { warn "mitmproxy install failed — run: pip3 install mitmproxy"; return 1; }
+  command -v mitmdump &>/dev/null || { warn "mitmproxy installed but mitmdump not on PATH — try: pip3 install --user mitmproxy"; return 1; }
+  ok "mitmproxy"
+}
+
+check_playwright() {
+  if python3 -c "import playwright" 2>/dev/null; then
+    ok "playwright (python)"
+    # Ensure chromium browser binary is installed
+    if ! python3 -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); p.chromium.executable_path" 2>/dev/null | grep -q chromium 2>/dev/null; then
+      info "Installing Playwright Chromium browser…"
+      python3 -m playwright install chromium --with-deps 2>/dev/null || \
+        playwright install chromium 2>/dev/null || \
+        warn "Playwright Chromium install failed — run: playwright install chromium --with-deps"
+    fi
+    return 0
+  fi
+  info "Installing playwright via pip3…"
+  pip3 install --quiet playwright 2>/dev/null || pip3 install playwright || { warn "playwright install failed — run: pip3 install playwright"; return 1; }
+  info "Installing Playwright Chromium browser (~130 MB)…"
+  python3 -m playwright install chromium --with-deps 2>/dev/null || \
+    playwright install chromium 2>/dev/null || \
+    warn "Chromium install failed — run: playwright install chromium --with-deps"
+  ok "playwright"
+}
+
+check_seclists() {
+  if [ -d /usr/share/seclists ]; then
+    ok "SecLists ($(ls /usr/share/seclists | wc -l | tr -d ' ') dirs)"
+    return 0
+  fi
+  info "Installing SecLists via apt-get…"
+  sudo apt-get install -y seclists -qq 2>/dev/null || {
+    warn "SecLists not available via apt — install manually: sudo apt-get install seclists"
+    info "ffuf and LFI fuzzing will use a minimal built-in wordlist as fallback"
+    return 0
+  }
+  ok "SecLists"
+}
+
+# ---------------------------------------------------------------------------
+# Cloud CLIs — auto-install (required for cloud/combined engagements)
+# ---------------------------------------------------------------------------
+
+install_aws_cli() {
+  info "Installing AWS CLI v2…"
+  local arch
+  arch=$(uname -m)
+  case "$arch" in
+    x86_64)  arch="x86_64" ;;
+    aarch64) arch="aarch64" ;;
+    *) warn "Unsupported architecture for AWS CLI: $arch"; return 1 ;;
+  esac
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${arch}.zip" -o "/tmp/awscliv2.zip" || { warn "Failed to download AWS CLI"; return 1; }
+  unzip -q /tmp/awscliv2.zip -d /tmp/awscli-install
+  sudo /tmp/awscli-install/aws/install --update 2>/dev/null || sudo /tmp/awscli-install/aws/install
+  rm -rf /tmp/awscliv2.zip /tmp/awscli-install
+}
+
+check_aws() {
+  if command -v aws &>/dev/null; then
+    ok "aws-cli ($(aws --version 2>&1 | head -1 | cut -d' ' -f1,2))"
+    return 0
+  fi
+  warn "AWS CLI not found — installing…"
+  install_aws_cli && ok "aws-cli" || warn "AWS CLI install failed. Install manually: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
+}
+
+install_gcloud() {
+  info "Installing Google Cloud SDK…"
+  # Add Google Cloud apt repo
+  curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+    | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg 2>/dev/null || true
+  echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
+    | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
+  sudo apt-get update -qq
+  sudo apt-get install -y google-cloud-cli -qq || { warn "gcloud install failed via apt"; return 1; }
+}
+
+check_gcloud() {
+  if command -v gcloud &>/dev/null; then
+    ok "gcloud ($(gcloud version 2>/dev/null | head -1))"
+    return 0
+  fi
+  warn "gcloud not found — installing…"
+  install_gcloud && ok "gcloud" || warn "gcloud install failed. Install manually: https://cloud.google.com/sdk/docs/install"
+}
+
+install_azure_cli() {
+  info "Installing Azure CLI…"
+  curl -fsSL https://aka.ms/InstallAzureCLIDeb | sudo bash || { warn "Azure CLI install failed"; return 1; }
+}
+
+check_azure() {
+  if command -v az &>/dev/null; then
+    ok "az (azure-cli $(az version 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('azure-cli',''))" 2>/dev/null || echo ''))"
+    return 0
+  fi
+  warn "Azure CLI not found — installing…"
+  install_azure_cli && ok "az (azure-cli)" || warn "Azure CLI install failed. Install manually: https://learn.microsoft.com/en-us/cli/azure/install-azure-cli"
+}
+
+install_pacu() {
+  info "Installing Pacu (AWS exploitation framework)…"
+  # Try pip3 first
+  pip3 install --quiet pacu 2>/dev/null && command -v pacu &>/dev/null && return 0
+
+  # Git clone fallback
+  if [ ! -d /opt/pacu ]; then
+    sudo git clone https://github.com/RhinoSecurityLabs/pacu.git /opt/pacu 2>/dev/null || { warn "Pacu git clone failed"; return 1; }
+  fi
+  pip3 install --quiet -r /opt/pacu/requirements.txt 2>/dev/null || pip3 install -r /opt/pacu/requirements.txt
+
+  # Create wrapper script
+  sudo tee /usr/local/bin/pacu > /dev/null << 'PACU_WRAPPER'
+#!/usr/bin/env bash
+cd /opt/pacu
+exec python3 cli.py "$@"
+PACU_WRAPPER
+  sudo chmod +x /usr/local/bin/pacu
+}
+
+check_pacu() {
+  if command -v pacu &>/dev/null; then
+    ok "pacu"
+    return 0
+  fi
+  warn "Pacu not found — installing…"
+  install_pacu && ok "pacu" || warn "Pacu install failed. Install manually: pip3 install pacu"
+}
+
+# ---------------------------------------------------------------------------
+# PDF report tools — required for lib/report-to-pdf.py
+# ---------------------------------------------------------------------------
+
+check_markdown_pkg() {
+  if python3 -c "import markdown" 2>/dev/null; then
+    ok "python3-markdown"
+    return 0
+  fi
+  info "Installing Markdown Python package via pip3…"
+  pip3 install --quiet Markdown 2>/dev/null || pip3 install Markdown || { warn "Markdown install failed — run: pip3 install Markdown"; return 1; }
+  python3 -c "import markdown" 2>/dev/null || { warn "Markdown installed but not importable — check Python environment"; return 1; }
+  ok "python3-markdown"
+}
+
+check_weasyprint() {
+  if python3 -c "import weasyprint" 2>/dev/null; then
+    ok "weasyprint"
+    return 0
+  fi
+  info "Installing weasyprint via pip3 (HTML → PDF converter)…"
+  # weasyprint requires pango/cairo system libs on some distros
+  sudo apt-get install -y -qq libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
+    libffi-dev shared-mime-info 2>/dev/null || true
+  pip3 install --quiet weasyprint 2>/dev/null || pip3 install weasyprint || { warn "weasyprint install failed — run: pip3 install weasyprint"; return 1; }
+  python3 -c "import weasyprint" 2>/dev/null || { warn "weasyprint installed but not importable — check Python environment"; return 1; }
+  ok "weasyprint"
 }
 
 # ---------------------------------------------------------------------------
@@ -182,15 +374,53 @@ main() {
   echo "InfoSec-Suite — dependency check"
   echo "================================="
 
+  # Core requirements
   check_go
   check_curl
   check_git
   check_jq
+  check_unzip
+  check_python3
+  check_python3_pip
   check_nmap
+
+  # ProjectDiscovery toolchain
   check_subfinder
   check_httpx
   check_nuclei
-  check_cloud_optional
+
+  # OSINT + web recon tools
+  check_trufflehog
+  check_wafw00f
+
+  # Exploit toolchain
+  echo ""
+  echo "Exploit tools (required for /exploit)"
+  echo "--------------------------------------"
+  check_ffuf
+  check_katana
+  check_dalfox
+  check_interactsh
+  check_sqlmap
+  check_mitmproxy
+  check_playwright
+  check_seclists
+
+  # Cloud CLIs + exploitation
+  echo ""
+  echo "Cloud tools (required for cloud/combined engagements)"
+  echo "------------------------------------------------------"
+  check_aws
+  check_gcloud
+  check_azure
+  check_pacu
+
+  # PDF report tools
+  echo ""
+  echo "PDF report tools (required for /report PDF output)"
+  echo "----------------------------------------------------"
+  check_markdown_pkg
+  check_weasyprint
 
   echo ""
   echo "All required tools are ready."

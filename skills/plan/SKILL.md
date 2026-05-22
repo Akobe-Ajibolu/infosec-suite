@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 0.1.0
+version: 1.0.1
 description: |
   Interactive security engagement planner. Guides the operator through
   target definition, scope, methodology selection, and rules of engagement.

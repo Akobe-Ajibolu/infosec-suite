@@ -1,0 +1,136 @@
+{
+  "engagement_id": "c3d4e5f6-1234-5678-abcd-ef0123456789",
+  "target": "corp.acme.com",
+  "generated": "2026-05-21T09:00:00Z",
+  "subdomain_sources": {
+    "subfinder": 9,
+    "crtsh": 5,
+    "hackertarget": 3,
+    "total_unique": 11
+  },
+  "assets": [
+    {
+      "host": "corp.acme.com",
+      "ip": "10.0.1.10",
+      "port": 443,
+      "scheme": "https",
+      "status_code": 200,
+      "title": "Acme Corp — Employee Portal",
+      "tech": ["IIS/10.0", "ASP.NET/4.8"],
+      "classification": "web",
+      "waf": null
+    },
+    {
+      "host": "intranet.acme.com",
+      "ip": "10.0.1.20",
+      "port": 80,
+      "scheme": "http",
+      "status_code": 200,
+      "title": "Acme Intranet",
+      "tech": ["Apache/2.4.54", "PHP/8.0.28"],
+      "classification": "web",
+      "waf": null
+    },
+    {
+      "host": "vpn.acme.com",
+      "ip": "203.0.113.50",
+      "port": 443,
+      "scheme": "https",
+      "status_code": 200,
+      "title": "Cisco AnyConnect VPN",
+      "tech": ["Cisco AnyConnect"],
+      "classification": "vpn",
+      "waf": null
+    },
+    {
+      "host": "mail.acme.com",
+      "ip": "10.0.1.30",
+      "port": 443,
+      "scheme": "https",
+      "status_code": 200,
+      "title": "Outlook Web Access",
+      "tech": ["Microsoft Exchange 2019"],
+      "classification": "mail",
+      "waf": null
+    },
+    {
+      "host": "jenkins.corp.acme.com",
+      "ip": "10.0.1.40",
+      "port": 8080,
+      "scheme": "http",
+      "status_code": 200,
+      "title": "Jenkins",
+      "tech": ["Jenkins/2.375.3"],
+      "classification": "devops",
+      "waf": null
+    },
+    {
+      "host": "jira.corp.acme.com",
+      "ip": "10.0.1.50",
+      "port": 443,
+      "scheme": "https",
+      "status_code": 200,
+      "title": "Jira Software",
+      "tech": ["Atlassian Jira/9.4.0"],
+      "classification": "web",
+      "waf": null
+    }
+  ],
+  "findings": [
+    {
+      "id": "recon-001",
+      "source": "nmap",
+      "host": "jenkins.corp.acme.com",
+      "port": 8080,
+      "severity": "high",
+      "title": "Jenkins CI/CD accessible without authentication",
+      "description": "Jenkins dashboard is accessible on port 8080 without requiring authentication. An unauthenticated user can view build history, environment variables, and potentially execute arbitrary build steps.",
+      "recommendation": "Enable Jenkins authentication immediately. Configure Matrix-based security. Restrict network access to Jenkins to VPN or internal network only.",
+      "review_recommended": false
+    },
+    {
+      "id": "recon-002",
+      "source": "nmap",
+      "host": "intranet.acme.com",
+      "port": 80,
+      "severity": "medium",
+      "title": "Intranet served over HTTP (unencrypted)",
+      "description": "The corporate intranet is served over plain HTTP on port 80. Any credentials or session tokens transmitted are exposed to network-level interception.",
+      "recommendation": "Migrate the intranet to HTTPS. Obtain a certificate from the internal CA and enforce TLS. Add HSTS headers after migration.",
+      "review_recommended": false
+    },
+    {
+      "id": "recon-003",
+      "source": "nmap",
+      "host": "vpn.acme.com",
+      "port": 443,
+      "severity": "info",
+      "title": "Cisco AnyConnect VPN version disclosed",
+      "description": "The VPN portal discloses the Cisco AnyConnect version in its HTML source. This assists an attacker in identifying known CVEs for the deployed version.",
+      "recommendation": "Configure the VPN portal to suppress version disclosure in HTTP responses and HTML source.",
+      "review_recommended": false
+    },
+    {
+      "id": "recon-004",
+      "source": "crtsh",
+      "host": "dev-internal.acme.com",
+      "port": null,
+      "severity": "low",
+      "title": "Development host exposed in certificate transparency logs",
+      "description": "A certificate was issued for dev-internal.acme.com and recorded in public certificate transparency logs. This reveals an internal development host to external observers.",
+      "recommendation": "Use an internal CA for development certificates to avoid exposing internal hostnames in public CT logs.",
+      "review_recommended": true
+    }
+  ],
+  "idor_candidates_file": "session/c3d4e5f6-1234-5678-abcd-ef0123456789/idor-candidates.txt",
+  "summary": {
+    "total_subdomains": 11,
+    "live_hosts": 6,
+    "classified": 6,
+    "findings_count": 4,
+    "github_hits": 0,
+    "github_secrets_verified": 0,
+    "emails_discovered": 0,
+    "phonebook_enabled": false
+  }
+}

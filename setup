@@ -20,7 +20,7 @@ banner() {
   echo "  ╚═╝╚═╝  ╚═══╝╚═╝      ╚═════╝ ╚══════╝╚══════╝ ╚═════╝"
   echo -e "${NC}"
   echo "  InfoSec-Suite — AI-driven security engagement framework"
-  echo "  Version: 0.1.0"
+  echo "  Version: 1.0.1"
   echo ""
 }
 
@@ -95,7 +95,7 @@ main() {
   bash "$SUITE_DIR/lib/tool-check.sh"
 
   echo ""
-  echo "Step 3/3 — Skill registration"
+  echo "Step 3/4 — Skill registration"
   echo "------------------------------"
   register_skills
 
@@ -109,8 +109,13 @@ main() {
   echo ""
   echo "Available skills:"
   echo "  /plan       — interactive engagement planning"
-  echo "  /recon      — subdomain enum, port scan, tech detection"
+  echo "  /recon      — subdomain enum, crt.sh, GitHub OSINT, WAF detection, port scan"
   echo "  /vuln-scan  — vulnerability scanning and classification"
+  echo "  /exploit    — browser crawl, injection point discovery, PoC validation"
+  echo "  /report     — generate professional pentest/bug bounty report"
+  echo ""
+  echo "API keys (optional, improve coverage):"
+  echo "  ~/.infosec-suite/config — set GITHUB_TOKEN, PHONEBOOK_API_KEY, HACKERTARGET_API_KEY"
   echo ""
 }
 

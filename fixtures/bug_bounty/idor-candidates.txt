@@ -1,0 +1,15 @@
+https://api.example.com/v1/users/1042/profile
+https://api.example.com/v1/users/1043/profile
+https://api.example.com/v1/orders/ORD-88821/details
+https://api.example.com/v1/orders/ORD-88822/details
+https://api.example.com/v1/invoices/INV-2026-00441
+https://api.example.com/v1/invoices/INV-2026-00442
+https://api.example.com/v2/accounts/9901/settings
+https://api.example.com/v2/accounts/9902/settings
+https://api.example.com/v2/documents/DOC-7712/download
+https://api.example.com/v2/documents/DOC-7713/download
+https://api.example.com/v1/admin/users/1/permissions
+https://api.example.com/v1/reports/RPT-55190/export
+https://example.com/dashboard/projects/342/members
+https://example.com/dashboard/projects/343/members
+https://staging.example.com/api/internal/config/env/1

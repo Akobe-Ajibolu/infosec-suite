@@ -1,0 +1,10 @@
+https://corp.acme.com/api/employees/1001/details
+https://corp.acme.com/api/employees/1002/details
+https://corp.acme.com/api/payroll/PAY-2026-001/slip
+https://corp.acme.com/api/payroll/PAY-2026-002/slip
+https://intranet.acme.com/documents/DOC-3310/view
+https://intranet.acme.com/documents/DOC-3311/view
+https://corp.acme.com/api/hr/reviews/REV-441/feedback
+https://jira.corp.acme.com/rest/api/2/issue/ACME-1001
+https://jira.corp.acme.com/rest/api/2/issue/ACME-1002
+https://corp.acme.com/admin/users/5/impersonate

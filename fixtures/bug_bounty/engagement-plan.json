@@ -1,0 +1,17 @@
+{
+  "engagement_id": "a8098c1a-f86e-11da-bd1a-00112444be1e",
+  "target": "example.com",
+  "context": "bug_bounty",
+  "methodology": "bug_bounty",
+  "created": "2026-05-21T10:00:00Z",
+  "targets": [
+    { "domain": "example.com", "in_scope": true },
+    { "domain": "api.example.com", "in_scope": true },
+    { "domain": "staging.example.com", "in_scope": true }
+  ],
+  "rules": {
+    "max_requests_per_second": 50,
+    "excluded_tools": [],
+    "sensitive_paths": ["/admin/internal", "/health/private"]
+  }
+}

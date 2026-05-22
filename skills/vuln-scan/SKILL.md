@@ -1,6 +1,6 @@
 ---
 name: vuln-scan
-version: 0.1.0
+version: 1.0.1
 description: |
   Vulnerability scanning skill. Reads findings-recon.json from /recon,
   selects nuclei templates based on detected tech and engagement type,
