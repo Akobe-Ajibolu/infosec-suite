@@ -95,7 +95,7 @@ main() {
   bash "$SUITE_DIR/lib/tool-check.sh"
 
   echo ""
-  echo "Step 3/4 — Skill registration"
+  echo "Step 3/3 — Skill registration"
   echo "------------------------------"
   register_skills
 

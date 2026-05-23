@@ -8,6 +8,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+# Will be updated to --break-system-packages on PEP 668 systems (Kali 2024+ / Debian Bookworm)
+PIP_FLAGS=""
+
 ok()   { echo -e "${GREEN}[OK]${NC}    $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 fail() { echo -e "${RED}[FAIL]${NC}  $*" >&2; exit 1; }
@@ -165,7 +168,8 @@ _pip_install() {
     return 0
   fi
   info "Installing $pkg via pip3…"
-  pip3 install --quiet "$pkg" 2>/dev/null || pip3 install "$pkg" || { warn "$name install failed via pip3"; return 1; }
+  # shellcheck disable=SC2086
+  pip3 install --quiet $PIP_FLAGS "$pkg" 2>/dev/null || pip3 install $PIP_FLAGS "$pkg" || { warn "$name install failed via pip3"; return 1; }
   hash -r 2>/dev/null || true
   command -v "$name" &>/dev/null || { warn "$name not on PATH after pip install — try: pip3 install --user $pkg"; return 1; }
   ok "$name"
@@ -205,7 +209,8 @@ check_mitmproxy() {
     return 0
   fi
   info "Installing mitmproxy via pip3…"
-  pip3 install --quiet mitmproxy 2>/dev/null || pip3 install mitmproxy || { warn "mitmproxy install failed — run: pip3 install mitmproxy"; return 1; }
+  # shellcheck disable=SC2086
+  pip3 install --quiet $PIP_FLAGS mitmproxy 2>/dev/null || pip3 install $PIP_FLAGS mitmproxy || { warn "mitmproxy install failed — run: pip3 install $PIP_FLAGS mitmproxy"; return 1; }
   command -v mitmdump &>/dev/null || { warn "mitmproxy installed but mitmdump not on PATH — try: pip3 install --user mitmproxy"; return 1; }
   ok "mitmproxy"
 }
@@ -214,7 +219,7 @@ check_playwright() {
   if python3 -c "import playwright" 2>/dev/null; then
     ok "playwright (python)"
     # Ensure chromium browser binary is installed
-    if ! python3 -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); p.chromium.executable_path" 2>/dev/null | grep -q chromium 2>/dev/null; then
+    if ! python3 -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); print(p.chromium.executable_path)" 2>/dev/null | grep -q chromium 2>/dev/null; then
       info "Installing Playwright Chromium browser…"
       python3 -m playwright install chromium --with-deps 2>/dev/null || \
         playwright install chromium 2>/dev/null || \
@@ -223,7 +228,8 @@ check_playwright() {
     return 0
   fi
   info "Installing playwright via pip3…"
-  pip3 install --quiet playwright 2>/dev/null || pip3 install playwright || { warn "playwright install failed — run: pip3 install playwright"; return 1; }
+  # shellcheck disable=SC2086
+  pip3 install --quiet $PIP_FLAGS playwright 2>/dev/null || pip3 install $PIP_FLAGS playwright || { warn "playwright install failed — run: pip3 install $PIP_FLAGS playwright"; return 1; }
   info "Installing Playwright Chromium browser (~130 MB)…"
   python3 -m playwright install chromium --with-deps 2>/dev/null || \
     playwright install chromium 2>/dev/null || \
@@ -346,7 +352,8 @@ check_markdown_pkg() {
     return 0
   fi
   info "Installing Markdown Python package via pip3…"
-  pip3 install --quiet Markdown 2>/dev/null || pip3 install Markdown || { warn "Markdown install failed — run: pip3 install Markdown"; return 1; }
+  # shellcheck disable=SC2086
+  pip3 install --quiet $PIP_FLAGS Markdown 2>/dev/null || pip3 install $PIP_FLAGS Markdown || { warn "Markdown install failed — run: pip3 install $PIP_FLAGS Markdown"; return 1; }
   python3 -c "import markdown" 2>/dev/null || { warn "Markdown installed but not importable — check Python environment"; return 1; }
   ok "python3-markdown"
 }
@@ -360,7 +367,8 @@ check_weasyprint() {
   # weasyprint requires pango/cairo system libs on some distros
   sudo apt-get install -y -qq libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
     libffi-dev shared-mime-info 2>/dev/null || true
-  pip3 install --quiet weasyprint 2>/dev/null || pip3 install weasyprint || { warn "weasyprint install failed — run: pip3 install weasyprint"; return 1; }
+  # shellcheck disable=SC2086
+  pip3 install --quiet $PIP_FLAGS weasyprint 2>/dev/null || pip3 install $PIP_FLAGS weasyprint || { warn "weasyprint install failed — run: pip3 install $PIP_FLAGS weasyprint"; return 1; }
   python3 -c "import weasyprint" 2>/dev/null || { warn "weasyprint installed but not importable — check Python environment"; return 1; }
   ok "weasyprint"
 }
@@ -374,6 +382,10 @@ main() {
   echo "InfoSec-Suite — dependency check"
   echo "================================="
 
+  # Refresh package lists — required on fresh installs before any apt-get install
+  info "Refreshing apt package lists…"
+  sudo apt-get update -qq 2>/dev/null || warn "apt-get update failed — package installs may fail on stale lists"
+
   # Core requirements
   check_go
   check_curl
@@ -382,6 +394,13 @@ main() {
   check_unzip
   check_python3
   check_python3_pip
+
+  # Detect PEP 668 (Kali 2024+ / Debian Bookworm — pip3 requires --break-system-packages)
+  if pip3 install --dry-run pip 2>&1 | grep -q 'externally-managed-environment'; then
+    PIP_FLAGS="--break-system-packages"
+    info "Detected externally-managed Python — using --break-system-packages for pip installs"
+  fi
+
   check_nmap
 
   # ProjectDiscovery toolchain
