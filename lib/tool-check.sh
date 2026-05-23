@@ -129,7 +129,19 @@ check_nuclei() {
 }
 
 check_trufflehog() {
-  _go_install trufflehog "github.com/trufflesecurity/trufflehog/v3@latest"
+  if command -v trufflehog &>/dev/null; then
+    ok "trufflehog"
+    return 0
+  fi
+  # go install does not work for trufflehog: their go.mod contains replace
+  # directives, which go install forbids. Use the official binary installer.
+  info "Installing trufflehog via official binary installer…"
+  curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
+    | sudo sh -s -- -b /usr/local/bin 2>&1 | tail -3 \
+    || { warn "trufflehog install failed — see https://github.com/trufflesecurity/trufflehog#installation"; return 1; }
+  command -v trufflehog &>/dev/null \
+    || { warn "trufflehog not found after install — check /usr/local/bin is on PATH"; return 1; }
+  ok "trufflehog"
 }
 
 # ---------------------------------------------------------------------------
