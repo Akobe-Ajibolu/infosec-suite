@@ -1,6 +1,6 @@
 ---
 name: infosec-recon
-version: 1.0.1
+version: 1.1.0
 description: |
   Reconnaissance skill. Multi-source passive subdomain enumeration (subfinder,
   crt.sh, HackerTarget/DNSDumpster), OSINT intelligence gathering (GitHub
@@ -22,15 +22,18 @@ Reconnaissance phase — maps the full attack surface before vulnerability scann
 
 1. Load engagement plan
 2. Passive subdomain enumeration (subfinder + crt.sh + HackerTarget)
-3. Scope filtering
-4. OSINT intelligence gathering (GitHub exposure + phonebook.cz)
-5. Live host probing (httpx)
-6. WAF detection (wafw00f)
-7. Port scanning (nmap)
-8. Tech detection (nuclei)
-9. IDOR/BOLA candidate flagging
-10. Asset classification + findings-recon.json
-11. Print summary
+3. JavaScript and source file mining (katana + secret patterns)
+4. Scope filtering
+5. OSINT intelligence gathering (GitHub exposure + phonebook.cz)
+6. Cloud storage discovery (S3/GCS/Azure bucket guessing)
+7. DNS and email security checks (zone transfer, DMARC, SPF)
+8. Live host probing (httpx)
+9. WAF detection (wafw00f)
+10. Port scanning (nmap)
+11. Tech detection (nuclei)
+12. IDOR/BOLA candidate flagging
+13. Asset classification + findings-recon.json
+14. Print summary
 
 ## Step 0: Load engagement plan
 
@@ -58,6 +61,17 @@ Read `engagement-plan.json` using the Read tool. Extract:
 - `known_tech[]`
 - `sensitive_paths[]`
 - `type` (web_app, api, cloud, combined)
+
+```bash
+# Derive SCOPE_FILE early so Step 1.5 (JS mining) can use it before Step 2 defines it
+SCOPE_FILE=$(python3 -c "
+import json, sys
+try:
+    print(json.load(open('$PLAN_FILE'))['scope_file'])
+except Exception as e:
+    sys.exit(1)
+" 2>/dev/null || echo "$SESSION_DIR/scope.txt")
+```
 
 ### Path B — Explicit params (standalone fallback)
 
@@ -168,7 +182,16 @@ HT_URL="https://api.hackertarget.com/hostsearch/?q=${TARGET}"
 curl -s --max-time 30 "$HT_URL" 2>/dev/null | \
   grep -v "^#\|API count\|error\|<!DOCTYPE" | \
   cut -d',' -f1 | \
-  grep -E "\.${TARGET//./\\.}$" \
+  python3 -c "
+import sys, re
+t = '${TARGET}'
+# Use re.escape so TARGET metacharacters (+ * . etc.) don't inject regex
+pat = re.compile(r'(^|\.)' + re.escape(t) + r'$', re.I)
+for line in sys.stdin:
+    line = line.strip()
+    if line and pat.search(line):
+        print(line)
+" \
   > "$SESSION_DIR/subdomains-hackertarget.txt" 2>/dev/null || true
 
 HT_COUNT=$(wc -l < "$SESSION_DIR/subdomains-hackertarget.txt" 2>/dev/null | tr -d ' ' || echo 0)
@@ -199,15 +222,249 @@ fi
 
 _update_state "subdomain_enum"
 
+## Step 1.5: JavaScript and source file mining
+
+Mine JS bundles and page source from discovered hosts for hidden API endpoints and exposed secrets.
+Skip if `type` is `cloud` (no HTTP surfaces to crawl).
+
+```bash
+TYPE=$(python3 -c "import json; print(json.load(open('$PLAN_FILE')).get('type','web_app'))" 2>/dev/null || echo "web_app")
+
+if [ "$TYPE" != "cloud" ] && command -v katana &>/dev/null; then
+  echo "[JS mining] Extracting endpoints from JavaScript files..."
+
+  katana \
+    -l "$SESSION_DIR/subdomains-inscope.txt" \
+    -jc \
+    -d 2 \
+    -silent \
+    -rate-limit "$MAX_RPS" \
+    -o "${SESSION_DIR}/js-katana-raw.txt" \
+    2>/dev/null || true
+
+  # Extract API/admin paths from discovered URLs
+  grep -E '(/api/|/v[0-9]+/|/graphql|/admin|/internal|/debug|/swagger|/openapi|/actuator|/metrics|/health|/config)' \
+    "${SESSION_DIR}/js-katana-raw.txt" 2>/dev/null | sort -u \
+    > "$SESSION_DIR/js-endpoints.txt" || true
+
+  JS_COUNT=$(wc -l < "$SESSION_DIR/js-endpoints.txt" 2>/dev/null | tr -d ' ' || echo 0)
+  echo "[JS] $JS_COUNT API/admin endpoints extracted from JS"
+
+  # Add newly discovered in-scope endpoints to live-urls.txt
+  python3 - << 'PYEOF'
+import sys
+scope_file = sys.argv[1]
+katana_file = sys.argv[2]
+live_urls_file = sys.argv[3]
+
+try:
+    scope = set(open(scope_file).read().splitlines())
+except:
+    scope = set()
+
+new_urls = []
+try:
+    with open(katana_file) as f:
+        for url in f:
+            url = url.strip()
+            if not url or '://' not in url:
+                continue
+            host = url.split('/')[2].split(':')[0]
+            if any(host == s or host.endswith('.' + s) for s in scope):
+                new_urls.append(url)
+except:
+    pass
+
+existing = set()
+try:
+    existing = set(open(live_urls_file).read().splitlines())
+except:
+    pass
+
+added = 0
+with open(live_urls_file, 'a') as f:
+    for u in new_urls:
+        if u not in existing:
+            f.write(u + '\n')
+            added += 1
+
+print(f'[JS] {added} new in-scope URLs appended to live-urls.txt')
+PYEOF
+"$SCOPE_FILE" "${SESSION_DIR}/js-katana-raw.txt" "$SESSION_DIR/live-urls.txt"
+
+  # Scan JS files for hardcoded secrets (heuristic — requires manual verification)
+  python3 - << 'PYEOF'
+import re, json, sys
+import urllib.request, ssl
+
+SESSION_DIR = sys.argv[1]
+SECRET_PATTERNS = [
+    (r'(?i)api[_-]?key["\'\s]*[:=]["\'\s]*([A-Za-z0-9_\-]{20,})', 'api_key'),
+    (r'(?i)secret[_-]?key["\'\s]*[:=]["\'\s]*([A-Za-z0-9_\-]{20,})', 'secret_key'),
+    (r'(?i)access[_-]?token["\'\s]*[:=]["\'\s]*([A-Za-z0-9_\-\.]{20,})', 'access_token'),
+    (r'eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]*', 'jwt_token'),
+    (r'AKIA[0-9A-Z]{16}', 'aws_access_key'),
+    (r'(?i)password["\'\s]*[:=]["\'\s]*([^\s"\']{8,})', 'password'),
+]
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+js_urls = []
+try:
+    with open(f'{SESSION_DIR}/js-katana-raw.txt') as f:
+        js_urls = [l.strip() for l in f if '.js' in l and l.strip()][:25]
+except:
+    pass
+
+findings = []
+for url in js_urls:
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, context=ctx, timeout=10) as r:
+            content = r.read(200000).decode('utf-8', errors='ignore')
+        for pattern, ptype in SECRET_PATTERNS:
+            for m in re.finditer(pattern, content):
+                findings.append({'url': url, 'type': ptype, 'match': m.group()[:80]})
+    except:
+        pass
+
+with open(f'{SESSION_DIR}/js-secrets.txt', 'w') as f:
+    for fn in findings:
+        f.write(f'{fn["type"]}|{fn["url"]}|{fn["match"]}\n')
+
+if findings:
+    print(f'[JS SECRETS] {len(findings)} potential secrets — review {SESSION_DIR}/js-secrets.txt')
+    for fn in findings[:5]:
+        print(f'  [{fn["type"]}] {fn["url"]}')
+else:
+    print('[JS SECRETS] No obvious secrets in sampled JS files')
+PYEOF
+"$SESSION_DIR"
+
+else
+  echo "[JS mining] Skipping — katana not installed or cloud-only engagement"
+fi
+```
+
+For each entry in `js-secrets.txt`, write a HIGH severity finding with `review_recommended: true` (heuristic patterns — always verify manually before reporting).
+
+_update_state "js_mining"
+
 ## Step 2: Scope filtering
 
 **Critical — this is the legal scope enforcement boundary.**
 
 ```bash
-SCOPE_FILE=$(python3 -c "import json; print(json.load(open('$PLAN_FILE'))['scope_file'])")
-grep -Fxf "$SCOPE_FILE" "$SESSION_DIR/subdomains-raw.txt" > "$SESSION_DIR/subdomains-inscope.txt" 2>/dev/null || true
+SCOPE_FILE=$(python3 -c "
+import json, sys
+try:
+    plan = json.load(open('$PLAN_FILE'))
+    print(plan['scope_file'])
+except Exception as e:
+    print(f'ERROR: {e}', file=sys.stderr)
+    sys.exit(1)
+")
 
-# Always include the primary target itself
+# Validate scope.txt is non-empty and well-formed before filtering
+python3 - << 'PYEOF'
+import sys, re
+
+scope_file = sys.argv[1]
+target     = sys.argv[2]
+
+try:
+    lines = [l.strip() for l in open(scope_file) if l.strip() and not l.startswith('#')]
+except Exception as e:
+    print(f'ERROR: Cannot read scope file: {e}')
+    sys.exit(1)
+
+if not lines:
+    print(f'ERROR: scope.txt is empty. Add at least one in-scope domain or IP before scanning.')
+    sys.exit(1)
+
+# Validate each entry is a valid domain, IP, or CIDR using ipaddress for IP/CIDR
+# (the simplified IPv6 regex '^[a-fA-F0-9:]+$' matched invalid addresses like ':::::::')
+import ipaddress as _ip
+
+DOMAIN_RE = re.compile(
+    r'^(\*\.)?'
+    r'([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
+)
+
+def _valid_entry(entry):
+    if DOMAIN_RE.match(entry):
+        return True
+    try:
+        _ip.ip_network(entry, strict=False)  # accepts IPv4, IPv4 CIDR, IPv6, IPv6 CIDR
+        return True
+    except ValueError:
+        return False
+
+invalid = [l for l in lines if not _valid_entry(l)]
+if invalid:
+    print(f'WARN: {len(invalid)} scope entries look malformed (check manually): {invalid[:5]}')
+
+# Verify primary target appears in scope
+found = any(target == l or target.endswith('.' + l) or l == '*.' + '.'.join(target.split('.')[1:])
+            for l in lines)
+if not found:
+    print(f'ERROR: Primary target "{target}" is not covered by scope.txt entries: {lines}')
+    print('Add the primary target domain to scope.txt before scanning.')
+    sys.exit(1)
+
+print(f'[Scope] {len(lines)} entries validated. Primary target "{target}" is in scope.')
+PYEOF
+"$SCOPE_FILE" "$TARGET" || {
+  echo "Scope validation failed — halting. Fix scope.txt and retry."
+  exit 1
+}
+
+# CIDR-aware scope filter — handles domains, wildcards, IPs, and CIDR ranges.
+# grep -Fxf does exact-string matching only; it can't match hostnames against CIDR ranges.
+python3 - << 'PYEOF'
+import sys, ipaddress
+
+scope_file = sys.argv[1]
+raw_file   = sys.argv[2]
+out_file   = sys.argv[3]
+
+try:
+    scope = [l.strip() for l in open(scope_file) if l.strip() and not l.startswith('#')]
+except Exception as e:
+    print(f'[WARN] Cannot read scope file: {e}', file=sys.stderr)
+    scope = []
+
+def in_scope(host):
+    for entry in scope:
+        entry_clean = entry.lstrip('*.')
+        if host == entry_clean or host.endswith('.' + entry_clean):
+            return True
+        try:
+            network = ipaddress.ip_network(entry, strict=False)
+            try:
+                if ipaddress.ip_address(host) in network:
+                    return True
+            except ValueError:
+                pass
+        except ValueError:
+            pass
+    return False
+
+try:
+    hosts = [l.strip() for l in open(raw_file) if l.strip()]
+except:
+    hosts = []
+
+inscope = [h for h in hosts if in_scope(h)]
+with open(out_file, 'w') as f:
+    f.write('\n'.join(inscope) + ('\n' if inscope else ''))
+print(f'[Scope] {len(inscope)}/{len(hosts)} hosts in scope (CIDR-aware filter)')
+PYEOF
+"$SCOPE_FILE" "$SESSION_DIR/subdomains-raw.txt" "$SESSION_DIR/subdomains-inscope.txt"
+
+# Include primary target if not already present (it passed scope validation above)
 grep -qFx "$TARGET" "$SESSION_DIR/subdomains-inscope.txt" 2>/dev/null || echo "$TARGET" >> "$SESSION_DIR/subdomains-inscope.txt"
 
 INSCOPE=$(wc -l < "$SESSION_DIR/subdomains-inscope.txt" | tr -d ' ')
@@ -318,7 +575,24 @@ else
     -H "Content-Type: application/json" \
     -d "{\"term\":\"${TARGET}\",\"maxresults\":200,\"media\":0,\"target\":0,\"terminate\":[]}" 2>/dev/null || echo "{}")
 
-  SEARCH_ID=$(echo "$SEARCH_RESP" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
+  # Extract search ID and surface any API errors explicitly
+  SEARCH_ID=$(echo "$SEARCH_RESP" | python3 -c "
+import json, sys
+try:
+    data = json.loads(sys.stdin.read())
+    sid = data.get('id', '')
+    # Surface API error messages (e.g. invalid key, quota exceeded)
+    if not sid:
+        err = data.get('error') or data.get('message') or data.get('status', '')
+        if err:
+            print(f'[phonebook.cz] API error: {err}', file=sys.stderr)
+    print(sid or '')
+except Exception as e:
+    print(f'[phonebook.cz] Parse error: {e}', file=sys.stderr)
+    print('')
+" 2>&1 | tee /dev/stderr | tail -1 || echo "")
+  # Strip any warning lines from SEARCH_ID — keep only the ID value
+  SEARCH_ID=$(echo "$SEARCH_ID" | grep -v '^\[phonebook' | tail -1 | tr -d ' ')
 
   if [ -n "$SEARCH_ID" ] && [ "$SEARCH_ID" != "null" ]; then
     sleep 5  # Allow IntelligenceX to complete the search
@@ -351,7 +625,11 @@ except Exception as e:
     print(f'Parse error: {e}')
 " 2>/dev/null || true
   else
-    echo "[phonebook.cz] Search initiation failed — check API key validity"
+    # Surface raw response so operator can diagnose the problem
+    echo "[phonebook.cz] Search initiation failed."
+    echo "  Raw API response: $(echo "$SEARCH_RESP" | head -c 300)"
+    echo "  Likely causes: invalid API key, quota exceeded, or network issue."
+    echo "  Verify your key at https://intelx.io/account?tab=developer"
   fi
 fi
 ```
@@ -363,6 +641,270 @@ Read `phonebook-results.json` using the Read tool. Extract:
 
 _update_state "osint_phonebook"
 
+## Step 3c: Cloud storage discovery
+
+Enumerate publicly accessible cloud storage buckets using target-derived naming patterns.
+Run for all engagement types — cloud storage exposures are common even for web-app-only targets.
+
+```bash
+TARGET_SHORT=$(echo "$TARGET" | sed 's/\..*//')
+echo "[Cloud Storage] Testing bucket patterns for ${TARGET_SHORT}..."
+
+python3 - << 'PYEOF'
+import urllib.request, ssl, sys, json
+
+TARGET_SHORT = sys.argv[1]
+SESSION_DIR  = sys.argv[2]
+
+names = [
+    TARGET_SHORT,
+    f"{TARGET_SHORT}-backup", f"{TARGET_SHORT}-dev", f"{TARGET_SHORT}-staging",
+    f"{TARGET_SHORT}-prod", f"{TARGET_SHORT}-data", f"{TARGET_SHORT}-files",
+    f"{TARGET_SHORT}-uploads", f"{TARGET_SHORT}-assets", f"{TARGET_SHORT}-static",
+    f"{TARGET_SHORT}-media", f"{TARGET_SHORT}-logs", f"{TARGET_SHORT}-config",
+    f"{TARGET_SHORT}-internal", f"{TARGET_SHORT}-private", f"{TARGET_SHORT}-api",
+    f"{TARGET_SHORT}-web", f"{TARGET_SHORT}-images", f"{TARGET_SHORT}-archive",
+]
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+findings = []
+
+for name in names:
+    for provider, url in [
+        ('s3',    f'https://{name}.s3.amazonaws.com/'),
+        ('gcs',   f'https://storage.googleapis.com/{name}/'),
+        ('azure', f'https://{name}.blob.core.windows.net/{name}/'),
+    ]:
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'InfoSec-Suite'})
+            with urllib.request.urlopen(req, context=ctx, timeout=8) as r:
+                body = r.read(500).decode('utf-8', errors='ignore')
+                is_listing = any(k in body for k in ('ListBucketResult', 'EnumerationResults', 'Contents'))
+                sev = 'critical' if is_listing else 'high'
+                findings.append({'provider': provider, 'bucket': name, 'url': url,
+                                  'status': r.status, 'listing': is_listing, 'severity': sev})
+                flag = '  [LISTING ENABLED]' if is_listing else ''
+                print(f'[CLOUD] {sev.upper()} {provider}:{name} HTTP {r.status}{flag}')
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                # Bucket exists but access denied — note it
+                findings.append({'provider': provider, 'bucket': name, 'url': url,
+                                  'status': 403, 'listing': False, 'severity': 'info',
+                                  'note': 'Bucket exists, access denied'})
+        except:
+            pass
+
+with open(f'{SESSION_DIR}/cloud-storage-findings.json', 'w') as f:
+    json.dump({'total': len(findings), 'findings': findings}, f, indent=2)
+
+accessible = [f for f in findings if f['status'] != 403]
+if accessible:
+    print(f'[CLOUD] {len(accessible)} accessible buckets → {SESSION_DIR}/cloud-storage-findings.json')
+else:
+    print('[CLOUD] No accessible buckets found with common naming patterns')
+PYEOF
+"$TARGET_SHORT" "$SESSION_DIR"
+```
+
+For each finding with `listing: true` → CRITICAL finding: `cloud_storage_public_listing`.
+For each finding with `status: 200` but no listing → HIGH finding: `cloud_storage_public_access`.
+For each finding with `status: 403` → INFO finding: `cloud_storage_exists` (bucket exists, closed — note for cloud engagement scope).
+
+_update_state "cloud_storage"
+
+## Step 3d: DNS and email security checks
+
+Test for DNS zone transfer and email spoofing protection. Missing controls enable phishing and domain hijacking.
+
+```bash
+echo "[DNS Security] Checking zone transfer and email security for ${TARGET}..."
+
+# Zone transfer attempt
+DIG_AXFR=$(dig AXFR "@$(dig NS ${TARGET} +short | head -1)" "$TARGET" +noall +answer 2>/dev/null || true)
+if echo "$DIG_AXFR" | grep -qE '\s(A|AAAA|CNAME|MX|TXT)\s'; then
+  echo "[DNS] CRITICAL: Zone transfer succeeded for ${TARGET}"
+  echo "$DIG_AXFR" > "$SESSION_DIR/dns-zone-transfer.txt"
+  ZONE_TRANSFER=true
+else
+  echo "[DNS] Zone transfer blocked (expected)"
+  ZONE_TRANSFER=false
+fi
+
+# DMARC
+DMARC=$(dig TXT "_dmarc.${TARGET}" +short 2>/dev/null | tr -d '"' | head -1 || true)
+if [ -z "$DMARC" ]; then
+  echo "[DNS] HIGH: No DMARC record — email spoofing as ${TARGET} is possible"
+  DMARC_STATUS="missing"
+elif echo "$DMARC" | grep -qi "p=none"; then
+  echo "[DNS] MEDIUM: DMARC p=none (monitoring only) — spoofing not blocked"
+  DMARC_STATUS="monitor_only"
+else
+  echo "[DNS] DMARC: $DMARC"
+  DMARC_STATUS="ok"
+fi
+
+# SPF
+SPF=$(dig TXT "$TARGET" +short 2>/dev/null | grep -i 'v=spf1' | tr -d '"' | head -1 || true)
+if [ -z "$SPF" ]; then
+  echo "[DNS] MEDIUM: No SPF record — email spoofing risk"
+  SPF_STATUS="missing"
+elif echo "$SPF" | grep -q '+all'; then
+  echo "[DNS] HIGH: SPF uses +all — permits any sender"
+  SPF_STATUS="permissive"
+else
+  echo "[DNS] SPF: $SPF"
+  SPF_STATUS="ok"
+fi
+
+# DKIM (probe common selectors)
+DKIM_FOUND=false
+for selector in default google selector1 selector2 mail s1 s2 k1 smtp; do
+  DKIM=$(dig TXT "${selector}._domainkey.${TARGET}" +short 2>/dev/null | grep 'p=' | head -1 || true)
+  if [ -n "$DKIM" ]; then
+    echo "[DNS] DKIM found (selector: ${selector})"
+    DKIM_FOUND=true
+    break
+  fi
+done
+$DKIM_FOUND || echo "[DNS] INFO: No common DKIM selector found — may use custom selector"
+```
+
+Write findings to `findings-recon.json` by status:
+- `ZONE_TRANSFER=true` → CRITICAL: `dns_zone_transfer_exposed`
+- `DMARC_STATUS=missing` → HIGH: `dmarc_missing`
+- `DMARC_STATUS=monitor_only` → MEDIUM: `dmarc_policy_none`
+- `SPF_STATUS=missing` → MEDIUM: `spf_missing`
+- `SPF_STATUS=permissive` → HIGH: `spf_plus_all`
+
+_update_state "dns_security"
+
+## Step 3e: Subdomain takeover (dangling CNAME detection)
+
+Check every in-scope subdomain for CNAMEs pointing at cloud/SaaS services that no longer have a matching resource — a classic subdomain takeover condition.
+
+```bash
+python3 - << 'PYEOF'
+import subprocess, json, sys, os, re
+
+SESSION_DIR = sys.argv[1]
+
+# Services whose CNAMEs indicate potential takeover if the resource is gone
+TAKEOVER_SIGNATURES = {
+    'amazonaws.com':        ('S3 / Elastic Beanstalk / CloudFront',  'NoSuchBucket|NoSuchDistribution|404|InvalidBucketName'),
+    'azurewebsites.net':    ('Azure App Service',                     'does not exist|404'),
+    'cloudapp.azure.com':   ('Azure Cloud App',                       '404'),
+    'azureedge.net':        ('Azure CDN',                             '404'),
+    'github.io':            ('GitHub Pages',                          "There isn't a GitHub Pages site here|404"),
+    'herokuapp.com':        ('Heroku',                                'No such app|404'),
+    'fastly.net':           ('Fastly CDN',                            'Fastly error: unknown domain|404'),
+    'ghost.io':             ('Ghost CMS',                             "The thing you were looking for is no longer here|404"),
+    'pantheonsite.io':      ('Pantheon',                              '404 error unknown site|404'),
+    'shopify.com':          ('Shopify',                               'Sorry, this shop is currently unavailable|404'),
+    'bitbucket.io':         ('Bitbucket Pages',                       'Repository not found|404'),
+    'surge.sh':             ('Surge.sh',                              "project not found|404"),
+    'netlify.app':          ('Netlify',                               "Not Found|404"),
+    'vercel.app':           ('Vercel',                                "The deployment could not be found|404"),
+    'readthedocs.io':       ('ReadTheDocs',                           'unknown to Read the Docs|404'),
+    'zendesk.com':          ('Zendesk',                               'Help Center Closed|404'),
+    'freshdesk.com':        ('Freshdesk',                             "We couldn't find|404"),
+    'statuspage.io':        ('Statuspage.io',                         'You are being redirected|404'),
+    'airee.ru':             ('Airee CDN',                             'Ошибка|404'),
+}
+
+subdomains = []
+try:
+    with open(os.path.join(SESSION_DIR, 'subdomains-inscope.txt')) as f:
+        subdomains = [l.strip() for l in f if l.strip()]
+except:
+    pass
+
+findings = []
+
+for subdomain in subdomains:
+    # Resolve CNAME
+    try:
+        r = subprocess.run(
+            ['dig', 'CNAME', subdomain, '+short'],
+            capture_output=True, text=True, timeout=10
+        )
+        cname = r.stdout.strip().rstrip('.')
+    except:
+        continue
+
+    if not cname:
+        continue
+
+    # Check if CNAME points to a known cloud service
+    matched_service = None
+    matched_sig = None
+    for domain_suffix, (service, sig) in TAKEOVER_SIGNATURES.items():
+        if cname.endswith(domain_suffix) or domain_suffix in cname:
+            matched_service = service
+            matched_sig = sig
+            break
+
+    if not matched_service:
+        continue
+
+    # Probe the subdomain for the unclaimed-resource fingerprint
+    try:
+        probe = subprocess.run(
+            ['curl', '-s', '--max-time', '10', '-L', '-o', '-',
+             '-w', '\nHTTP_CODE:%{http_code}', f'http://{subdomain}'],
+            capture_output=True, text=True, timeout=15
+        )
+        body = probe.stdout
+        http_code = ''
+        for line in body.splitlines():
+            if line.startswith('HTTP_CODE:'):
+                http_code = line.split(':', 1)[1].strip()
+        body_lower = body.lower()
+    except:
+        body_lower = ''
+        http_code = ''
+
+    # Check fingerprints (any match → likely unclaimed)
+    fingerprints = [f.strip() for f in matched_sig.split('|')]
+    hit = any(fp.lower() in body_lower for fp in fingerprints if not fp.isdigit())
+    hit = hit or (http_code in ('404', '410') and matched_service in ('GitHub Pages', 'Netlify', 'Vercel', 'Surge.sh'))
+
+    if hit:
+        findings.append({
+            'subdomain': subdomain,
+            'cname': cname,
+            'service': matched_service,
+            'http_code': http_code,
+            'severity': 'high',
+            'type': 'subdomain_takeover',
+            'evidence': f'CNAME {subdomain} → {cname} ({matched_service}); fingerprint matched',
+            'recommendation': (f'Remove dangling DNS record for {subdomain} or register the '
+                               f'{matched_service} resource it points to before an attacker does.'),
+            'review_recommended': True,
+            'review_reason': 'Automated detection — verify the resource is genuinely unclaimed before reporting.',
+        })
+        print(f'[TAKEOVER] HIGH {subdomain} → {cname} ({matched_service}) HTTP {http_code}')
+    else:
+        print(f'[TAKEOVER] {subdomain} → {cname} ({matched_service}): no unclaimed fingerprint (HTTP {http_code})')
+
+with open(os.path.join(SESSION_DIR, 'subdomain-takeover.json'), 'w') as f:
+    json.dump({'total': len(findings), 'findings': findings}, f, indent=2)
+
+if findings:
+    print(f'\n[TAKEOVER] {len(findings)} potential subdomain takeover(s) found.')
+    print(f'           Review {SESSION_DIR}/subdomain-takeover.json and verify manually.')
+else:
+    print('[TAKEOVER] No dangling CNAMEs detected.')
+PYEOF
+"$SESSION_DIR"
+```
+
+Add each finding from `subdomain-takeover.json` to `findings-recon.json` as severity `high`, `review_recommended: true`.
+
+_update_state "subdomain_takeover"
+
 ## Step 4: Live host probing
 
 ```bash
@@ -372,16 +914,31 @@ httpx -l "$SESSION_DIR/subdomains-inscope.txt" \
   -o "$SESSION_DIR/live-hosts.json" -json
 
 LIVE=$(python3 -c "
-lines = open('$SESSION_DIR/live-hosts.json').read().strip().split('\n')
-print(sum(1 for l in lines if l.strip()))
-" 2>/dev/null || wc -l < "$SESSION_DIR/live-hosts.json" | tr -d ' ')
+import os
+path = '$SESSION_DIR/live-hosts.json'
+if not os.path.exists(path):
+    print(0)
+else:
+    lines = open(path).read().strip().split('\n')
+    print(sum(1 for l in lines if l.strip()))
+" 2>/dev/null || echo 0)
 echo "HTTPX: $LIVE live hosts"
+
+if [ "$LIVE" -eq 0 ]; then
+  echo ""
+  echo "=============================="
+  echo " ERROR: No live HTTP/HTTPS hosts found."
+  echo " Check that targets are reachable and"
+  echo " that scope.txt contains valid in-scope hosts."
+  echo " Stopping recon — nothing to scan."
+  echo "=============================="
+  # Write partial findings so /infosec-report has context
+  _update_state "live_host_probe"
+  exit 1
+fi
 ```
 
 Note: httpx with `-json` writes NDJSON (one JSON object per line). Use `python3 -c "import json; data=[json.loads(l) for l in open(f) if l.strip()]"` when processing.
-
-If 0 live hosts: warn "No live HTTP/HTTPS hosts found. Check if targets are reachable. Stopping recon — nothing to scan."
-Do not proceed to WAF detection or port scanning with empty results.
 
 _update_state "live_host_probe"
 
@@ -395,13 +952,18 @@ import json
 urls = []
 for line in open('$SESSION_DIR/live-hosts.json'):
     line = line.strip()
-    if line:
-        try:
-            urls.append(json.loads(line)['url'])
-        except: pass
+    if not line:
+        continue
+    try:
+        obj = json.loads(line)
+        url = obj.get('url','')
+        if url:
+            urls.append(url)
+    except json.JSONDecodeError:
+        pass  # skip malformed/truncated NDJSON lines
 with open('$SESSION_DIR/live-urls.txt', 'w') as f:
-    f.write('\n'.join(urls))
-" 2>/dev/null || python3 -c "import json; [open('$SESSION_DIR/live-urls.txt','a').write(json.loads(l)['url']+'\n') for l in open('$SESSION_DIR/live-hosts.json') if l.strip()]"
+    f.write('\n'.join(urls) + ('\n' if urls else ''))
+" 2>/dev/null || true
 
 if command -v wafw00f &>/dev/null; then
   echo "[wafw00f] Detecting WAFs on $(wc -l < "$SESSION_DIR/live-urls.txt") hosts…"
@@ -446,13 +1008,18 @@ import json
 hosts = set()
 for line in open('$SESSION_DIR/live-hosts.json'):
     line = line.strip()
-    if line:
-        try:
-            hosts.add(json.loads(line)['host'])
-        except: pass
+    if not line:
+        continue
+    try:
+        obj = json.loads(line)
+        h = obj.get('host','')
+        if h:
+            hosts.add(h)
+    except json.JSONDecodeError:
+        pass  # skip malformed/truncated NDJSON lines
 with open('$SESSION_DIR/hostnames.txt', 'w') as f:
     f.write('\n'.join(sorted(hosts)))
-" 2>/dev/null
+" 2>/dev/null || true
 
 nmap -sV --open -T4 --min-parallelism 10 \
   -iL "$SESSION_DIR/hostnames.txt" \

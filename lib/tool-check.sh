@@ -136,9 +136,16 @@ check_trufflehog() {
   # go install does not work for trufflehog: their go.mod contains replace
   # directives, which go install forbids. Use the official binary installer.
   info "Installing trufflehog via official binary installer…"
+  # Download to temp file first — avoids piping untrusted content directly to shell
+  local _installer
+  _installer="$(mktemp /tmp/trufflehog-install-XXXXXX.sh)"
   curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
-    | sudo sh -s -- -b /usr/local/bin 2>&1 | tail -3 \
-    || { warn "trufflehog install failed — see https://github.com/trufflesecurity/trufflehog#installation"; return 1; }
+    -o "$_installer" \
+    || { warn "trufflehog installer download failed — see https://github.com/trufflesecurity/trufflehog#installation"; rm -f "$_installer"; return 1; }
+  sudo sh "$_installer" -b /usr/local/bin 2>&1 | tail -3
+  local _rc=${PIPESTATUS[0]:-$?}
+  rm -f "$_installer"
+  [ "$_rc" -ne 0 ] && { warn "trufflehog install failed — see https://github.com/trufflesecurity/trufflehog#installation"; return 1; }
   command -v trufflehog &>/dev/null \
     || { warn "trufflehog not found after install — check /usr/local/bin is on PATH"; return 1; }
   ok "trufflehog"
@@ -313,7 +320,16 @@ check_gcloud() {
 
 install_azure_cli() {
   info "Installing Azure CLI…"
-  curl -fsSL https://aka.ms/InstallAzureCLIDeb | sudo bash || { warn "Azure CLI install failed"; return 1; }
+  # Download to temp file first — avoids piping untrusted content directly to shell
+  local _installer
+  _installer="$(mktemp /tmp/azure-cli-install-XXXXXX.sh)"
+  curl -fsSL https://aka.ms/InstallAzureCLIDeb -o "$_installer" \
+    || { warn "Azure CLI installer download failed"; rm -f "$_installer"; return 1; }
+  sudo bash "$_installer"
+  local _rc=$?
+  rm -f "$_installer"
+  [ "$_rc" -ne 0 ] && { warn "Azure CLI install failed"; return 1; }
+  return 0
 }
 
 check_azure() {

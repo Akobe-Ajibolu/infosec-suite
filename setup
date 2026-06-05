@@ -11,16 +11,24 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 banner() {
+  local _ver
+  _ver="$(cat "$SUITE_DIR/VERSION" 2>/dev/null | tr -d '[:space:]' || echo "unknown")"
   echo -e "${BOLD}"
-  echo "  ██╗███╗   ██╗███████╗ ██████╗ ███████╗███████╗ ██████╗"
-  echo "  ██║████╗  ██║██╔════╝██╔═══██╗██╔════╝██╔════╝██╔════╝"
-  echo "  ██║██╔██╗ ██║█████╗  ██║   ██║███████╗█████╗  ██║"
-  echo "  ██║██║╚██╗██║██╔══╝  ██║   ██║╚════██║██╔══╝  ██║"
-  echo "  ██║██║ ╚████║██║     ╚██████╔╝███████║███████╗╚██████╗"
-  echo "  ╚═╝╚═╝  ╚═══╝╚═╝      ╚═════╝ ╚══════╝╚══════╝ ╚═════╝"
+  echo "  ██╗███╗   ██╗███████╗ ██████╗ ███████╗███████╗ ██████╗ "
+  echo "  ██║████╗  ██║██╔════╝██╔═══██╗██╔════╝██╔════╝██╔════╝ "
+  echo "  ██║██╔██╗ ██║█████╗  ██║   ██║███████╗█████╗  ██║      "
+  echo "  ██║██║╚██╗██║██╔══╝  ██║   ██║╚════██║██╔══╝  ██║      "
+  echo "  ██║██║ ╚████║██║     ╚██████╔╝███████║███████╗╚██████╗ "
+  echo "  ╚═╝╚═╝  ╚═══╝╚═╝      ╚═════╝ ╚══════╝╚══════╝ ╚═════╝ "
+  echo "  ███████╗██╗   ██╗██╗████████╗███████╗"
+  echo "  ██╔════╝██║   ██║██║╚══██╔══╝██╔════╝"
+  echo "  ███████╗██║   ██║██║   ██║   █████╗  "
+  echo "  ╚════██║██║   ██║██║   ██║   ██╔══╝  "
+  echo "  ███████║╚██████╔╝██║   ██║   ███████╗"
+  echo "  ╚══════╝ ╚═════╝ ╚═╝   ╚═╝   ╚══════╝"
   echo -e "${NC}"
   echo "  InfoSec-Suite — AI-driven security engagement framework"
-  echo "  Version: 1.0.1"
+  echo "  Version: $_ver"
   echo ""
 }
 
@@ -113,6 +121,7 @@ main() {
   echo "  /infosec-vuln-scan  — vulnerability scanning and classification"
   echo "  /infosec-exploit    — browser crawl, injection point discovery, PoC validation"
   echo "  /infosec-report     — generate professional pentest/bug bounty report"
+  echo "  /infosec-update     — check for and apply InfoSec-Suite updates"
   echo ""
   echo "API keys (optional, improve coverage):"
   echo "  ~/.infosec-suite/config — set GITHUB_TOKEN, PHONEBOOK_API_KEY, HACKERTARGET_API_KEY"

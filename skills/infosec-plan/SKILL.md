@@ -45,6 +45,21 @@ fi
 If any MISSING lines appear, tell the operator: "Run `./setup` to install missing tools, then restart /infosec-plan."
 Do NOT proceed with missing required tools.
 
+## Step 0.5: Update check
+
+Run the update check (cached — takes <1s when network is up):
+
+```bash
+UPDATE_RESULT=$(bash "$SUITE_DIR/bin/infosec-update-check" 2>/dev/null || echo "")
+echo "UPDATE_CHECK: $UPDATE_RESULT"
+```
+
+If output contains `UPGRADE_AVAILABLE <version> <N>`:
+Print exactly this line (nothing else, do not block planning):
+`[InfoSec-Suite] v<version> — <N> update(s) available. Run /infosec-update to upgrade.`
+
+If output is `UP_TO_DATE` or empty/error: continue silently.
+
 ## Step 1: Gather engagement details
 
 Ask the operator the following questions. Use AskUserQuestion for each one. Collect all answers before proceeding.
@@ -123,10 +138,17 @@ For cloud or combined engagements, note in the plan summary which sub-methodolog
 
 ```bash
 # Generate UUID
-ENGAGEMENT_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())")
+ENGAGEMENT_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || python3 -c "import uuid; print(uuid.uuid4())" 2>/dev/null || "")
+
+# Fallback: timestamp-based ID if all UUID methods fail
+if [ -z "$ENGAGEMENT_ID" ]; then
+  ENGAGEMENT_ID=$(date +%s%N 2>/dev/null | sha256sum | head -c 32 || date +%s | sha256sum | head -c 32)
+  echo "[WARN] UUID generation failed — using timestamp-based ID: ${ENGAGEMENT_ID}"
+fi
 
 SESSION_DIR="session/${ENGAGEMENT_ID}"
 mkdir -p "$SESSION_DIR"
+chmod 700 "$SESSION_DIR"
 
 echo "Engagement ID: $ENGAGEMENT_ID"
 echo "Session directory: $SESSION_DIR"

@@ -64,7 +64,12 @@ PREPARER_EMAIL=$(grep '^PREPARER_EMAIL=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f
 EVIDENCE_MAX=$(grep '^EVIDENCE_MAX_CHARS=' "$CONFIG_FILE" 2>/dev/null | cut -d= -f2 | tr -d ' ' || echo "500")
 
 # Load plan fields
-TARGET=$(python3 -c "import json; d=json.load(open('${PLAN_FILE}')); print(d.get('target',''))")
+TARGET=$(python3 -c "
+import json, sys
+d = json.load(open('${PLAN_FILE}'))
+ts = d.get('targets', [])
+print(ts[0] if ts else d.get('target', ''))
+")
 CONTEXT=$(python3 -c "import json; d=json.load(open('${PLAN_FILE}')); print(d.get('context','pentest'))")
 METHODOLOGY=$(python3 -c "import json; d=json.load(open('${PLAN_FILE}')); print(d.get('methodology','pentest'))")
 CREATED=$(python3 -c "import json; d=json.load(open('${PLAN_FILE}')); print(d.get('created','')[:10])")
@@ -245,9 +250,11 @@ def truncate(text, limit):
     return text if len(text) <= limit else text[:limit] + ' [...truncated]'
 
 def sev_label(sev):
+    # Default to 'Informational' instead of silently returning an empty/unknown label
+    # that would fall through sev_counts with no match and mask missing severity data.
     return {'critical':'Critical','high':'High','medium':'Medium','moderate':'Medium',
             'low':'Low','info':'Informational','informational':'Informational'
-            }.get(str(sev).lower(), str(sev).title())
+            }.get(str(sev).lower(), 'Informational')
 
 def sev_order(sev):
     return {'critical':0,'high':1,'medium':2,'moderate':2,'low':3,
@@ -270,12 +277,31 @@ for f in recon.get('findings', []):
     raw.append({**f, '_source': 'recon'})
 
 if vulns:
-    seen = set()
+    seen = {}  # key → index in raw, so we can replace with more informative duplicate
     for f in vulns.get('findings', []):
-        key = (safe(f,'template-id','?'), safe(f,'host'), str(safe(f,'port','')))
-        if key in seen: continue
-        seen.add(key)
-        raw.append({**f, '_source': 'vuln'})
+        # Prefer explicit finding id; fall back to composite key that avoids
+        # collisions when template-id is missing ('?' would merge unrelated findings)
+        fid = safe(f, 'id', '')
+        if fid:
+            key = fid
+        else:
+            tmpl  = safe(f, 'template-id', '')
+            title = safe(f, 'title', safe(f, 'type', ''))
+            key   = (tmpl or title or 'unknown', safe(f, 'host'), str(safe(f, 'port', '')),
+                     safe(f, 'severity', ''))
+        new_entry = {**f, '_source': 'vuln'}
+        if key in seen:
+            # Keep whichever copy has more evidence (longer evidence string wins)
+            existing_idx = seen[key]
+            existing_ev  = str(safe(raw[existing_idx], 'matcher-output') or
+                               safe(raw[existing_idx], 'output') or '')
+            new_ev       = str(safe(new_entry, 'matcher-output') or
+                               safe(new_entry, 'output') or '')
+            if len(new_ev) > len(existing_ev):
+                raw[existing_idx] = new_entry
+        else:
+            seen[key] = len(raw)
+            raw.append(new_entry)
 
 if exploit:
     for f in exploit.get('poc_results', []):
@@ -855,6 +881,9 @@ if [ -f "$PDF_SCRIPT" ] && python3 -c "import weasyprint" 2>/dev/null; then
   echo "[INFO] Generating PDF…"
   if python3 "$PDF_SCRIPT" "$REPORT_FILE" --output "$PDF_FILE" 2>&1; then
     echo "[OK]   PDF  → ${PDF_FILE}"
+    # Clean up intermediate HTML file left by report-to-pdf.py
+    HTML_FILE="${PDF_FILE%.pdf}.html"
+    [ -f "$HTML_FILE" ] && rm -f "$HTML_FILE" && echo "[OK]   Removed intermediate HTML file"
   else
     echo "[WARN] PDF generation failed — markdown report is still complete"
     echo "       Check weasyprint install: pip3 install weasyprint"

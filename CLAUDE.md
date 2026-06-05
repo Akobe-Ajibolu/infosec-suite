@@ -12,6 +12,7 @@ Key routing rules:
 - Vuln scan / vulnerability / scan / nuclei → invoke /infosec-vuln-scan
 - Exploit / test / validate / inject / bruteforce / crawl → invoke /infosec-exploit
 - Report / generate report / write report → invoke /infosec-report
+- Update / check for updates / upgrade → invoke /infosec-update
 
 ## Operator model
 
@@ -49,6 +50,7 @@ session/{engagement_id}/
 ├── phonebook-results.json      # phonebook.cz / IntelligenceX results
 ├── live-hosts.json             # httpx output (NDJSON)
 ├── live-urls.txt               # URL list for nuclei and wafw00f
+├── subdomain-takeover.json     # Dangling CNAME / takeover candidates
 ├── waf-detection.json          # wafw00f WAF detection results
 ├── hostnames.txt               # Hostname list for nmap
 ├── nmap-output.nmap            # Human-readable nmap output
