@@ -21,6 +21,7 @@ Built on [Claude Code](https://claude.ai/code). For solo bug bounty hunters and 
 | `/infosec-vuln-scan` | Vulnerability scanning — methodology-aware nuclei templates, severity classification, false-positive flagging |
 | `/infosec-exploit` | Guided exploitation — browser crawl via mitmproxy + Playwright, injection point discovery, directory bruteforce (ffuf), PoC validation per vuln class |
 | `/infosec-report` | Report generation — professional pentest report or HackerOne-ready bug bounty submission from findings JSON, with PDF export |
+| `/infosec-update` | Check for and apply InfoSec-Suite updates — shows incoming commits and changed files, prompts for confirmation, pulls and re-runs setup |
 
 ## Requirements
 
@@ -31,7 +32,7 @@ Built on [Claude Code](https://claude.ai/code). For solo bug bounty hunters and 
 ## Setup
 
 ```bash
-git clone https://github.com/akobeajiboluemmanuel/infosec-suite
+git clone https://github.com/Akobe-Ajibolu/infosec-suite.git
 cd infosec-suite
 chmod +x setup
 ./setup
@@ -73,6 +74,9 @@ claude
 
 # Step 5: Generate the report
 /infosec-report
+
+# Keep InfoSec-Suite up to date
+/infosec-update
 ```
 
 Example output from `/infosec-report`:
@@ -171,5 +175,5 @@ InfoSec-Suite was inspired by [Garry Tan's gstack](https://github.com/garrytan/g
 ## Roadmap
 
 - v1.0.0: `/infosec-plan` + `/infosec-recon` + `/infosec-vuln-scan` ✅
-- v1.0.1: `/infosec-exploit` + `/infosec-report` — browser crawl, PoC validation, multi-role auth testing, professional report generation, PDF output via weasyprint ✅
+- v1.0.1: `/infosec-exploit` + `/infosec-report` + `/infosec-update` — browser crawl, PoC validation, multi-role auth testing, professional report generation, PDF output, self-update skill ✅
 - v1.2.0: parallel engagements, multi-target support, auth-aware scanning
